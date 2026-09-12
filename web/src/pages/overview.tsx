@@ -1,12 +1,24 @@
-import { useDeferredValue, useMemo, useState } from "react"
+import { useDeferredValue, useMemo, useState, type ReactNode } from "react"
 import { ToggleChip, chipGroupClass } from "@/components/toggle-chip"
 import { Link, useSearchParams } from "react-router"
-import { DotsThree, MagnifyingGlass } from "@phosphor-icons/react"
+import {
+  ArrowClockwise,
+  Bell,
+  Broadcast,
+  DesktopTower,
+  DotsThree,
+  MagnifyingGlass,
+  WarningCircle,
+} from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { EmptyState } from "@/components/empty-state"
 import { Segmented } from "@/components/segmented"
 import { NodeTagsDialog } from "@/components/node-tags-dialog"
-import { nodeTags, useSettings } from "@/components/settings-provider"
+import {
+  nodeMaintenance,
+  nodeTags,
+  useSettings,
+} from "@/components/settings-provider"
 import { ServerSheet } from "@/components/server-sheet"
 import { StatusDot } from "@/components/status-dot"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
@@ -88,6 +100,56 @@ const LATEST_AGENT = fleet.reduce(
   "0.0.0",
 )
 
+/*
+  软底状态徽章。
+
+  改前表格里的"异常"只有**颜色文字**（`text-warn-text`）一个通道 ——
+  颜色一淡就看不出来，对色觉障碍读者也只剩深浅差别。
+  现在补上底色与描边：颜色 + 形状（圆角块）+ 文字，三个通道。
+
+  底色由 token 加透明度得来（`--warn` / `--crit` 的 10%），不引第二套调色板。
+*/
+type BadgeTone = "warn" | "crit" | "neutral"
+
+/*
+  染色底的透明度是量出来的：/10 时 crit 徽章的文字只有 4.46:1（差 0.04 不达标），
+  /8 是 4.60:1。正好也是全站标签徽章既有的配方（`border-brand/25 bg-brand/8`）。
+
+  描边 /25 对卡片只有 1.26:1 —— 它是**装饰性的柔边**，不承担语义：
+  徽章的含义由文字（4.6:1 以上）承载，底色与圆角是冗余通道，
+  所以这里不按 1.4.11 的 3:1 要求它。
+*/
+const BADGE_TONE: Record<BadgeTone, string> = {
+  warn: "border-warn/25 bg-warn/8 text-warn-text",
+  crit: "border-crit/25 bg-crit/8 text-crit-text",
+  neutral: "border-border bg-muted text-muted-foreground",
+}
+
+function ToneBadge({
+  tone,
+  title,
+  className,
+  children,
+}: {
+  tone: BadgeTone
+  title?: string
+  className?: string
+  children: ReactNode
+}) {
+  return (
+    <span
+      title={title}
+      className={cn(
+        "num inline-flex h-5 max-w-full items-center rounded-[4px] border px-1.5 text-2xs",
+        BADGE_TONE[tone],
+        className,
+      )}
+    >
+      <span className="truncate">{children}</span>
+    </span>
+  )
+}
+
 export function OverviewPage() {
   useFleetTick()
   const [params, setParams] = useSearchParams()
@@ -162,56 +224,98 @@ export function OverviewPage() {
   return (
     <>
         {/*
-          统计条：标签在上、数值在下（§AP 定的两级层级），但**内容换了一套**。
+          顶部 5 项统计：由 §AP 的扁平两级条改成**紧凑 KPI 卡片**。
 
-          改前是「在线 · 告警 · 平均 CPU · 入站 · 出站」—— 后三项就是前台 KPI 的
-          同一批展示数据。后台该回答的是"有没有需要我处理的事、配置齐不齐"，
-          所以换成：在线 / 触发中告警 / agent 落后 / 探测启用 / 规则启用。
+          内容口径保留 §AT 换的那一套（在线 / 触发中告警 / agent 落后 /
+          探测启用 / 规则启用）—— 后台回答的是"有没有需要我处理的事、配置齐不齐"。
 
-          顺带修一个口径问题：原来的「告警 3」数的是**触发中的告警事件条数**，
-          而前台状态通栏的「1 告警」数的是**告警节点数** —— 同一个词两个口径。
-          现在标签写明「触发中告警」。
+          与前台的关系：前台 KPI 本来就是卡片（`kpi-tiles.tsx`，固定 112px），
+          后台这 5 张是同一个族里更紧凑的一档（没有 sparkline，所以不用 112px）。
+          卡片本身不接 hover、不可点：**一个静态的卡片加 hover 阴影是纯装饰**
+          （§P 那轮专门扫过"每个卡片的入场动画"这类 AI 味），要可点就必须真的有去处。
         */}
         <dl
           data-testid="admin-stats"
-          /*
-            窄屏用 grid、宽屏回到 flex：
-            5 项在 390px 下 flex-wrap 会排成 4+1，末项独占一行、右侧空出 85%（实测），
-            grid 的行是规整的所以不显突兀；而宽屏下 flex 让它们紧凑地靠左排，
-            保持 §AP 定的形态（grid 会把 5 项摊满整行，5 列里每列大半是空的）。
-          */
-          className="grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-3 lg:flex lg:flex-wrap lg:items-start lg:gap-y-2"
+          className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5"
         >
           {[
-            { label: "在线", value: `${online} / ${fleet.length}` },
+            {
+              label: "在线",
+              value: `${online} / ${fleet.length}`,
+              tone: online === fleet.length ? "ok" : "warn",
+              note:
+                online === fleet.length
+                  ? "全部在线"
+                  : `${fleet.length - online} 台离线`,
+              icon: DesktopTower,
+            },
             {
               label: "触发中告警",
               value: String(firing),
-              warn: firing > 0,
+              tone: firing > 0 ? "warn" : null,
+              note: firing > 0 ? "需要处理" : "没有触发中的告警",
+              icon: WarningCircle,
             },
             {
               label: "agent 落后",
               value: `${staleAgents} 台`,
-              warn: staleAgents > 0,
+              tone: staleAgents > 0 ? "warn" : null,
+              note: staleAgents > 0 ? `最新 v${LATEST_AGENT}` : "都跑在最新版",
+              icon: ArrowClockwise,
             },
             {
               label: "探测任务",
               value: `${enabledProbes} / ${aliveProbes.length} 启用`,
+              // 停用探测是有意为之，不是异常 —— 不套状态色（§AF：状态色只给异常）
+              tone: null,
+              note:
+                enabledProbes === aliveProbes.length
+                  ? "全部启用"
+                  : `${aliveProbes.length - enabledProbes} 个已停用`,
+              icon: Broadcast,
             },
             {
               label: "告警规则",
               value: `${enabledRules} / ${alertRules.length} 启用`,
+              tone: null,
+              note:
+                enabledRules === alertRules.length
+                  ? "全部启用"
+                  : `${alertRules.length - enabledRules} 个已停用`,
+              icon: Bell,
             },
           ].map((item) => (
-            <div key={item.label} className="flex flex-col gap-0.5">
-              <dt className="text-2xs text-subtle">{item.label}</dt>
+            <div key={item.label} className="card flex flex-col gap-1.5 p-3">
+              <dt className="flex items-center gap-1.5 text-2xs text-muted-foreground">
+                <item.icon className="size-3.5 shrink-0 text-muted-foreground/60" />
+                <span className="truncate">{item.label}</span>
+              </dt>
               <dd
-                className={`num text-sm font-semibold tracking-tight ${
-                  item.warn ? "text-warn-text" : "text-foreground"
-                }`}
+                className={cn(
+                  "num truncate text-lg font-semibold leading-none tracking-tight",
+                  item.tone === "warn" && "text-warn-text",
+                  item.tone === "ok" && "text-foreground",
+                )}
               >
                 {item.value}
               </dd>
+              <div
+                className={cn(
+                  "flex items-center gap-1.5 text-2xs",
+                  item.tone === "warn" ? "text-warn-text" : "text-subtle",
+                )}
+              >
+                {item.tone && (
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "size-[6px] shrink-0 rounded-full",
+                      item.tone === "warn" ? "bg-warn" : "bg-ok",
+                    )}
+                  />
+                )}
+                <span className="truncate">{item.note}</span>
+              </div>
             </div>
           ))}
         </dl>
@@ -221,13 +325,30 @@ export function OverviewPage() {
           · 搜索框   —— 透明底 + 边框（在灰页面上最"轻"）
           · 状态分段 —— 实心灰容器 + 几乎看不出的选中（见 Segmented 的注释）
           · 标签胶囊 —— **每个胶囊各带一圈边框**，高度还比容器矮 4px（h-7 vs 32px 容器内）
-        现在：搜索是唯一的"输入"，用白底与两组筛选分开；两组筛选是**同一类控件**，
-        共用 chipGroupClass + raised 选中态，高度统一 32px。§O 的教训是
-        "不同功能的控件不能长得一样"，而这里两组本来就是同一功能（筛选），
-        所以给它们各加一个 11px 的组名，解决"两个「全部」指哪个"的歧义。
+        现在两组筛选是**同一类控件**，共用 chipGroupClass + raised 选中态、
+        高度统一 32px。§O 的教训是"不同功能的控件不能长得一样"，
+        而这里两组本来就是同一功能（筛选），所以各加一个 11px 的组名消歧义
+        （两个组都以「全部」开头，不加就不知道指的是哪个）。
+
+        整个工具栏再装进一层白色 card，形成三级层次：
+        页面底(<--background) < 工具栏(<--card) < 控件组(<--muted)。
+        所以搜索框用"透明 + 边框"就够 —— 它四周已经是白的，不必再靠白底区分自己。
       */}
-      <div className="mb-3 mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="relative w-full sm:w-[220px]">
+      {/*
+        窄屏用**显式 grid**、宽屏回到 flex：
+        flex-wrap 在 390 下会把末项「12 台」挤到第四行独占一行（实测：
+        标签组 290 + 间距 12 + 计数 30.4 = 332.4，而可用宽正好 332 —— 差 0.4px）。
+        0.4px 这种边界不能靠调间距去赌，grid 两列是确定的：
+        第一行 [搜索 | 计数]，状态与标签各占一整行。
+      */}
+      <div className="card mb-3 mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 p-2 sm:flex sm:flex-wrap sm:gap-x-3">
+        {/*
+          窄屏让搜索框 flex-1 与右侧的「12 台」共享一行：
+          它原本 w-full 独占一行，导致工具栏多一行、且计数在标签那一行被挤到
+          0.4px 之外单独换行（实测 290 + 12 + 30.4 vs 可用 332）。
+          flex-1 + min-w-0 让它可收缩，计数就能落在同一行的右端。
+        */}
+        <div className="relative min-w-0 sm:w-[220px] sm:flex-none">
           <MagnifyingGlass
             className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-subtle"
           />
@@ -236,11 +357,11 @@ export function OverviewPage() {
             onChange={(event) => setQuery(event.target.value)}
             placeholder="搜索名称、IP、标签"
             aria-label="搜索名称、IP、标签"
-            className="h-8 bg-card pl-8 text-xs"
+            className="h-8 pl-8 text-xs"
           />
         </div>
 
-        <div className="flex w-full items-center gap-2 sm:w-auto">
+        <div className="col-span-2 flex items-center gap-2 sm:w-auto">
           {/*
             组名只为消歧义（两组选项都以「全部」开头）。
             只在 xl 才显示是量出来的：1024 下内容区 768px，带组名需要 790px ——
@@ -262,7 +383,7 @@ export function OverviewPage() {
           />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="col-span-2 flex items-center gap-2">
           <span className="hidden text-2xs text-subtle xl:inline">标签</span>
           <div className={chipGroupClass} role="group" aria-label="按标签筛选">
             {TAGS.map((item) => (
@@ -279,7 +400,12 @@ export function OverviewPage() {
           </div>
         </div>
 
-        <span className="num ml-auto text-2xs text-subtle">
+        {/*
+          必须显式指定格子：grid 的自动排布是"顺序游标"，
+          前面两个 col-span-2 的组会把游标推到第三行之后，
+          末项的计数就被排到第四行去了（实测）。定死第 1 行第 2 列。
+        */}
+        <span className="num col-start-2 row-start-1 justify-self-end text-2xs text-subtle sm:ml-auto">
           {servers.length} 台
         </span>
       </div>
@@ -393,32 +519,45 @@ export function OverviewPage() {
                         {/* 标签是配置，可能被「编辑标签」改过，不能直接读 mock */}
                         {nodeTags(settings, item.id, item.tags).join(" · ")}
                       </span>
+                      {/*
+                        §AS 加的「维护模式」此前在列表里看不到。
+                        用中性徽章而不是琥珀：维护是**有意为之**，不是告警。
+                      */}
+                      {nodeMaintenance(settings, item.id) && (
+                        <ToneBadge tone="neutral" className="shrink-0" title="告警已静音">
+                          维护中
+                        </ToneBadge>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="h-11 px-3">
-                    {/* 第一行网络地址（主）、第二行操作系统（次） */}
-                    <div className="truncate">
-                      <span className="num text-xs text-muted-foreground">
+                    {/*
+                      两行都用 flex 行，而不是 inline 流：
+                      行内元素会按基线对齐，一个 inline-block 的徽章会把行盒从 14px
+                      撑到 24.8px（实测），整行行高因此从 50 涨到 62.7 —— 而"保持 50px"
+                      是明确的选择。flex 子项没有基线外溢，高度就等于徽章自己的高度。
+                    */}
+                    <div className="flex items-baseline gap-2">
+                      <span className="num truncate text-xs text-muted-foreground">
                         {item.ip}
                       </span>
-                      <span className="ml-2 text-2xs text-subtle">
+                      <span className="shrink-0 text-2xs text-subtle">
                         {item.region}
                       </span>
                     </div>
-                    <div
-                      className="truncate text-2xs text-subtle"
-                      title={item.os}
-                    >
-                      {item.os}
+                    {/* 系统做成浅色小标签：它是次要信息，但比纯文字更容易从地址里分出来 */}
+                    <div className="mt-0.5 flex">
+                      <span
+                        className="inline-flex h-3.5 max-w-full items-center truncate rounded-[4px] bg-muted px-1.5 text-2xs leading-none text-muted-foreground"
+                        title={item.os}
+                      >
+                        {item.os}
+                      </span>
                     </div>
                   </TableCell>
-                  <TableCell className="num h-11 px-3 text-xs">
-                    <span
-                      className={cn(
-                        item.agent !== LATEST_AGENT
-                          ? "text-warn-text"
-                          : "text-muted-foreground",
-                      )}
+                  <TableCell className="h-11 px-3">
+                    <ToneBadge
+                      tone={item.agent !== LATEST_AGENT ? "warn" : "neutral"}
                       title={
                         item.agent !== LATEST_AGENT
                           ? `落后于最新 v${LATEST_AGENT}`
@@ -426,15 +565,19 @@ export function OverviewPage() {
                       }
                     >
                       v{item.agent}
-                    </span>
+                    </ToneBadge>
                   </TableCell>
-                  <TableCell
-                    className={cn(
-                      "num h-11 px-3 text-right text-xs",
-                      item.offline ? "text-crit-text" : "text-muted-foreground",
+                  <TableCell className="h-11 px-3">
+                    {/* 离线时"多久没上报"才是要看的数 —— 用 crit 徽章顶出来 */}
+                    {item.offline ? (
+                      <ToneBadge tone="crit" title="超过离线判定阈值">
+                        {item.lastSeen}
+                      </ToneBadge>
+                    ) : (
+                      <span className="num text-xs text-muted-foreground">
+                        {item.lastSeen}
+                      </span>
                     )}
-                  >
-                    {item.lastSeen}
                   </TableCell>
                   <TableCell className="h-11 px-3">
                     {/*
@@ -447,15 +590,12 @@ export function OverviewPage() {
                         return <span className="text-xs text-subtle">—</span>
                       }
                       return (
-                        <span
-                          className={cn(
-                            "num text-xs",
-                            concern.over ? "text-crit-text" : "text-warn-text",
-                          )}
+                        <ToneBadge
+                          tone={concern.over ? "crit" : "warn"}
                           title={`阈值 ${concern.limit}%`}
                         >
                           {concern.label} {Math.round(concern.value)}%
-                        </span>
+                        </ToneBadge>
                       )
                     })()}
                   </TableCell>
