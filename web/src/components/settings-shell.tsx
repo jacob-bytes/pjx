@@ -1,26 +1,20 @@
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
-  useMemo,
   useState,
   type ReactNode,
 } from "react"
 import { Check, WarningCircle } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { usePersistentState } from "@/lib/persist"
-import {
-  DEFAULT_SETTINGS,
-  SETTINGS_KEY,
-  deepEqual,
-  type Settings,
-} from "@/lib/settings"
+import { deepEqual } from "@/lib/settings"
 import { cn } from "@/lib/utils"
 
 /**
- * 设置页的外壳：一份共享的配置 + 统一的区块与本页表单的草稿语义。
+ * 设置页的外壳：统一的区块、字段与「草稿 + 保存」语义。
+ *
+ * 配置本身（Provider / useSettings / 领域 hook）在 components/settings-provider.tsx ——
+ * 它要覆盖总览、探测、告警这些也在写配置的页面，所以挂在 AppShell 上。
  *
  * 改这一块的原因是四件具体的事（见 docs/polish-round4.md §AR）：
  *  1. 四个子页原来是三种外壳（card / 裸 div / 裸表格）
@@ -30,42 +24,6 @@ import { cn } from "@/lib/utils"
  *     用户分不出哪个是哪个
  *  4. 没有未保存标记 —— 改完切走就静默丢了
  */
-
-/* ------------------------------------------------------------------ 配置 store */
-
-interface SettingsContextValue {
-  settings: Settings
-  save: (patch: Partial<Settings>) => void
-}
-
-const SettingsContext = createContext<SettingsContextValue | null>(null)
-
-export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = usePersistentState<Settings>(
-    SETTINGS_KEY,
-    DEFAULT_SETTINGS,
-  )
-
-  const save = useCallback(
-    (patch: Partial<Settings>) => {
-      setSettings((prev) => ({ ...prev, ...patch }))
-    },
-    [setSettings],
-  )
-
-  const value = useMemo(() => ({ settings, save }), [settings, save])
-  return (
-    <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
-  )
-}
-
-export function useSettings() {
-  const value = useContext(SettingsContext)
-  if (!value) {
-    throw new Error("useSettings 必须在 SettingsProvider 内使用")
-  }
-  return value
-}
 
 /* ------------------------------------------------------------------ 草稿 */
 
@@ -83,7 +41,8 @@ export function useDraft<T extends object>(saved: T) {
 
   const reset = useCallback(() => setDraft(saved), [saved])
 
-  return { draft, patch, reset, dirty }
+  // set 用于整体替换（数组这类没有"字段"可 patch 的草稿）
+  return { draft, set: setDraft, patch, reset, dirty }
 }
 
 /* ------------------------------------------------------------------ 区块外壳 */

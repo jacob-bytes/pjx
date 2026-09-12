@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from "react-router"
 import { ArrowSquareOut, Bell, Broadcast, Gear, List, MagnifyingGlass, Waveform } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { CommandPalette } from "@/components/command-palette"
+import { SettingsProvider } from "@/components/settings-provider"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { LiveStatus } from "@/components/live-status"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -29,12 +30,17 @@ const TITLES: Record<string, string> = {
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <>
-      <div className="flex h-12 items-center gap-2 border-b px-4 pr-12">
+      {/*
+        pr-12 是给移动端抽屉的关闭按钮留位的（SheetContent 把它放在右上角）；
+        桌面 aside 没有这个按钮，pr-4 就够 —— 否则整个头部内容会被往左推 32px。
+        原来这里还有一个 `ml-auto` 靠右的「管理」字样：菜单本身已经在后台里了，
+        写「管理」既是重复，又因为 pr-12 被顶到中间，看着像一句错位的标签。已删。
+      */}
+      <div className="flex h-12 items-center gap-2 border-b px-4 pr-12 md:pr-4">
         <span className="grid size-5 place-items-center rounded-[5px] bg-foreground font-mono text-2xs font-semibold text-background">
           p
         </span>
         <span className="text-sm font-semibold tracking-tight">pjx</span>
-        <span className="ml-auto text-2xs text-subtle">管理</span>
       </div>
 
       <nav className="flex flex-col gap-0.5 p-2">
@@ -106,7 +112,12 @@ export function AppShell() {
   const section = location.pathname.split("/")[1] ?? ""
 
   return (
-    <div className="min-h-svh">
+    /*
+      配置的 Provider 挂在这一层：设置页在写它，总览（节点标签、维护模式）、
+      探测（启停/删除）、告警（规则启停）也在写它 —— 必须是同一份。
+    */
+    <SettingsProvider>
+      <div className="min-h-svh">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[216px] flex-col border-r bg-card md:flex">
         <SidebarNav />
       </aside>
@@ -164,6 +175,7 @@ export function AppShell() {
       </div>
 
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
-    </div>
+      </div>
+    </SettingsProvider>
   )
 }

@@ -5,8 +5,8 @@ import {
   SettingsFooter,
   SettingsSection,
   useDraft,
-  useSettings,
 } from "@/components/settings-shell"
+import { useSettings } from "@/components/settings-provider"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import {

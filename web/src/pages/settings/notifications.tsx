@@ -8,8 +8,8 @@ import {
   SettingsFooter,
   SettingsSection,
   useDraft,
-  useSettings,
 } from "@/components/settings-shell"
+import { useSettings } from "@/components/settings-provider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"

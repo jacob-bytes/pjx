@@ -52,6 +52,18 @@ test.describe("公网状态页", () => {
 })
 
 test.describe("后台", () => {
+  /*
+    路由回归：`/admin`（不带尾斜杠）曾经掉进 SPA fallback，返回根 index.html
+    ——也就是**前台状态页**。断言一个只存在于后台的元素，比断言标题更硬。
+  */
+  test("`/admin` 不带尾斜杠也进后台", async ({ page }) => {
+    await makeDeterministic(page)
+    await page.goto("/admin")
+    await waitForData(page)
+    await expect(page).toHaveTitle(/管理/)
+    await expect(page.getByTestId("admin-table")).toBeVisible()
+  })
+
   test("总览 · 浅色", async ({ page }) => {
     await makeDeterministic(page)
     await page.goto("/admin/")
@@ -89,6 +101,14 @@ test.describe("后台", () => {
     await expect(page).toHaveScreenshot("admin-settings-access.png", {
       fullPage: true,
     })
+  })
+
+  /* 探测页 §AS 加了「启用」开关与行操作列，列数从 9 变 11 */
+  test("探测任务", async ({ page }) => {
+    await makeDeterministic(page)
+    await page.goto("/admin/probes")
+    await waitForData(page)
+    await expect(page).toHaveScreenshot("admin-probes.png", { fullPage: true })
   })
 })
 
@@ -196,6 +216,21 @@ test.describe("元素级快照", () => {
     await page.fill("#site-name", "我的探针站")
     await expect(page.getByTestId("settings-footer")).toHaveScreenshot(
       "el-settings-footer-dirty.png",
+      TIGHT,
+    )
+  })
+
+  /* 标签编辑对话框：§AS 之前「编辑标签」是一个点了没反应的菜单项 */
+  test("后台 · 标签编辑对话框", async ({ page }) => {
+    await makeDeterministic(page)
+    await page.goto("/admin/")
+    await waitForData(page)
+    const row = page.getByTestId("admin-table").locator("tbody tr").first()
+    await row.hover()
+    await row.getByRole("button", { name: "更多操作" }).click()
+    await page.getByRole("menuitem", { name: "编辑标签" }).click()
+    await expect(page.getByRole("dialog")).toHaveScreenshot(
+      "el-node-tags-dialog.png",
       TIGHT,
     )
   })

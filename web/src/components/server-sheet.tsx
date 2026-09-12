@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from "react"
 import { Copy, DotsThree } from "@phosphor-icons/react"
 import { toast } from "sonner"
+import { NodeTagsDialog } from "@/components/node-tags-dialog"
+import { nodeTags, useSettings } from "@/components/settings-provider"
 import { TimeSeriesChart } from "@/components/time-series-chart"
 import { Sparkline } from "@/components/sparkline"
 import { StatusDot } from "@/components/status-dot"
@@ -62,6 +64,8 @@ function Hint({ title, desc }: { title: string; desc: string }) {
 export function ServerSheet({ server }: { server: Server }) {
   const [copied, setCopied] = useState(false)
   const [removing, setRemoving] = useState(false)
+  const [editingTags, setEditingTags] = useState(false)
+  const { settings } = useSettings()
   const offline = Boolean(server.offline)
 
   // 百分比类序列走固定域 [0,100]；网络没有天然上界，用自动域
@@ -127,7 +131,9 @@ export function ServerSheet({ server }: { server: Server }) {
           <SheetTitle className="text-base font-semibold">
             {server.name}
           </SheetTitle>
-          <span className="text-2xs text-subtle">{server.tags.join(" · ")}</span>
+          <span className="text-2xs text-subtle">
+            {nodeTags(settings, server.id, server.tags).join(" · ")}
+          </span>
           <div className="ml-auto flex items-center gap-1.5">
             <Button
               variant="outline"
@@ -143,13 +149,16 @@ export function ServerSheet({ server }: { server: Server }) {
                 <Button
                   variant="outline"
                   size="icon"
+                  aria-label="更多操作"
                   className="size-7 text-muted-foreground"
                 >
                   <DotsThree className="size-3.5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-36">
-                <DropdownMenuItem>编辑标签</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setEditingTags(true)}>
+                  编辑标签
+                </DropdownMenuItem>
                 <DropdownMenuItem>查看探测结果</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -330,6 +339,16 @@ export function ServerSheet({ server }: { server: Server }) {
           </TabsContent>
         </div>
       </Tabs>
+
+      {editingTags && (
+        <NodeTagsDialog
+          serverId={server.id}
+          serverName={server.name}
+          defaultTags={server.tags}
+          open
+          onOpenChange={(open) => !open && setEditingTags(false)}
+        />
+      )}
 
       <ConfirmDialog
         open={removing}

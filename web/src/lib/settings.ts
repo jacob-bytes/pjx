@@ -31,12 +31,54 @@ export interface AgentToken {
   token: string
 }
 
+/**
+ * 节点级配置。`undefined` 的字段 = 用 mock（将来是 master）给的默认值 ——
+ * 这一层只存"被改过的部分"，接真实接口时提交的就是这些差量。
+ */
+export interface NodeConfig {
+  /** 覆盖默认标签；`undefined` 表示没改过 */
+  tags?: string[]
+  /** 维护模式：该节点的告警静音（但指标照常采集） */
+  maintenance?: boolean
+}
+
+/**
+ * 用户新建的探测任务。
+ *
+ * 只有配置，**没有运行时数据** —— mock（将来是 master）才是 avg/p95/成功率/最近检查
+ * 的来源。新建的任务在收到第一次上报之前，那几个格子显示「—」，
+ * 而不是编一个 0.0 / 100% 出来。
+ */
+export interface CreatedProbe {
+  id: string
+  name: string
+  kind: "HTTP" | "TCP" | "ICMP"
+  target: string
+  interval: string
+  timeoutSec: string
+  scope: string
+  failThreshold: string
+  notifications: string
+}
+
 export interface Settings {
   siteName: string
   timezone: string
   telegram: TelegramSettings
   retention: RetentionSettings
   tokens: AgentToken[]
+  /** 按 server.id 索引的节点配置差量 */
+  nodes: Record<string, NodeConfig>
+  /**
+   * 探测任务的启停、删除与新建。
+   * mock 是只读数据源，写操作在这里以"叠加"的方式表达：
+   * 接 master 后换成 POST/PATCH/DELETE /probes/:id。
+   */
+  probeEnabled: Record<string, boolean>
+  probesRemoved: string[]
+  probesCreated: CreatedProbe[]
+  /** 告警规则的启停（只记被改过的，没改过的走 mock 默认值） */
+  ruleEnabled: Record<string, boolean>
 }
 
 export const SETTINGS_KEY = "pjx-settings"
@@ -57,6 +99,11 @@ export const DEFAULT_SETTINGS: Settings = {
     m1Keep: "14d",
     h1Keep: "365d",
   },
+  nodes: {},
+  probeEnabled: {},
+  probesCreated: [],
+  probesRemoved: [],
+  ruleEnabled: {},
   tokens: [
     {
       id: "t-01",
@@ -74,6 +121,18 @@ export const DEFAULT_SETTINGS: Settings = {
     },
   ],
 }
+
+/**
+ * 阈值。表格里那个「最紧指标」列与告警规则的默认条件共用这一份 ——
+ * 之前服务器详情 Sheet 里的阈值参考线是**硬编码** 90/92/85，
+ * 而告警规则里同样写着 cpu > 90 / mem > 92 / disk > 85，两处各写一份。
+ */
+export const METRIC_LIMITS = [
+  { key: "cpu", label: "CPU", limit: 90 },
+  { key: "mem", label: "内存", limit: 92 },
+  { key: "disk", label: "磁盘", limit: 85 },
+] as const
+
 
 /**
  * 生成一枚 32 位十六进制令牌。

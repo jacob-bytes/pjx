@@ -1,6 +1,8 @@
 import { useSearchParams } from "react-router"
 import { BellSlash } from "@phosphor-icons/react"
+import { toast } from "sonner"
 import { EmptyState } from "@/components/empty-state"
+import { useRuleEnabled } from "@/components/settings-provider"
 import { Segmented } from "@/components/segmented"
 import { StatusDot } from "@/components/status-dot"
 import { Badge } from "@/components/ui/badge"
@@ -15,7 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { alertEvents, alertRules } from "@/lib/mock"
+import { alertEvents, alertRules, type AlertRule } from "@/lib/mock"
 import { pickParam } from "@/lib/url"
 import { cn } from "@/lib/utils"
 
@@ -25,6 +27,56 @@ const LEVEL_COLOR = {
   warn: "bg-warn",
   info: "bg-info",
 } as const
+
+/**
+ * 告警规则的一行。
+ * 「启用」原来是 `defaultChecked`（无 state，刷新即回默认）—— 现在落进配置 store。
+ * 行内开关 = 改完立即生效，并给一句提示。
+ */
+function RuleRow({ rule }: { rule: AlertRule }) {
+  const { enabled, setEnabled } = useRuleEnabled(rule.id, rule.enabled)
+
+  return (
+    <TableRow className={cn(!enabled && "text-subtle")}>
+      <TableCell className="h-9 px-3 text-xs font-medium">
+        <div className="flex items-center gap-2">
+          <span className={cn(enabled && "text-foreground")}>{rule.name}</span>
+          {!enabled && (
+            <Badge
+              variant="outline"
+              className="h-5 rounded-[4px] px-1.5 text-2xs font-normal text-subtle"
+            >
+              已停用
+            </Badge>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="num h-9 px-3 text-xs text-muted-foreground">
+        {rule.condition}
+      </TableCell>
+      <TableCell className="num h-9 px-3 text-xs">{rule.hold}</TableCell>
+      <TableCell className="h-9 px-3">
+        <span className="flex items-center gap-1.5 text-xs">
+          <StatusDot status={rule.level === "crit" ? "crit" : "warn"} />
+          {LEVEL_LABEL[rule.level]}
+        </span>
+      </TableCell>
+      <TableCell className="h-9 px-3 text-xs text-muted-foreground">
+        {rule.channel}
+      </TableCell>
+      <TableCell className="h-9 px-3 text-right">
+        <Switch
+          checked={enabled}
+          onCheckedChange={(checked) => {
+            setEnabled(checked)
+            toast(checked ? `已启用规则「${rule.name}」` : `已停用规则「${rule.name}」`)
+          }}
+          aria-label={`启用告警规则 ${rule.name}`}
+        />
+      </TableCell>
+    </TableRow>
+  )
+}
 
 export function AlertsPage() {
   const [params, setParams] = useSearchParams()
@@ -179,31 +231,7 @@ export function AlertsPage() {
             </TableHeader>
             <TableBody>
               {alertRules.map((rule) => (
-                <TableRow key={rule.id}>
-                  <TableCell className="h-9 px-3 text-xs font-medium">
-                    {rule.name}
-                  </TableCell>
-                  <TableCell className="num h-9 px-3 text-xs text-muted-foreground">
-                    {rule.condition}
-                  </TableCell>
-                  <TableCell className="num h-9 px-3 text-xs">
-                    {rule.hold}
-                  </TableCell>
-                  <TableCell className="h-9 px-3">
-                    <span className="flex items-center gap-1.5 text-xs">
-                      <StatusDot
-                        status={rule.level === "crit" ? "crit" : "warn"}
-                      />
-                      {LEVEL_LABEL[rule.level]}
-                    </span>
-                  </TableCell>
-                  <TableCell className="h-9 px-3 text-xs text-muted-foreground">
-                    {rule.channel}
-                  </TableCell>
-                  <TableCell className="h-9 px-3 text-right">
-                    <Switch defaultChecked={rule.enabled} />
-                  </TableCell>
-                </TableRow>
+                <RuleRow key={rule.id} rule={rule} />
               ))}
             </TableBody>
           </Table>

@@ -6,6 +6,8 @@ import { toast } from "sonner"
 import { EmptyState } from "@/components/empty-state"
 import { Segmented } from "@/components/segmented"
 import { Heartbeat } from "@/components/heartbeat"
+import { NodeTagsDialog } from "@/components/node-tags-dialog"
+import { nodeTags, useSettings } from "@/components/settings-provider"
 import { ResourceBar } from "@/components/resource-bar"
 import { ServerSheet } from "@/components/server-sheet"
 import { StatusDot } from "@/components/status-dot"
@@ -29,7 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { TableSkeleton } from "@/components/ui/skeleton"
-import { alertEvents, fleet, useFleetStatus, useFleetTick } from "@/lib/mock"
+import { alertEvents, fleet, useFleetStatus, useFleetTick, type Server } from "@/lib/mock"
 import { pct, rate } from "@/lib/format"
 import { pickParam } from "@/lib/url"
 import { cn } from "@/lib/utils"
@@ -105,6 +107,8 @@ export function OverviewPage() {
   const [removing, setRemoving] = useState<{ id: string; name: string } | null>(
     null,
   )
+  // 「编辑标签」的落点：菜单项此前没有处理函数，点了什么都不发生
+  const [editingTags, setEditingTags] = useState<Server | null>(null)
 
   // 筛选状态放 URL：可分享、可回退、刷新不丢；与 ?server= 共存
   const query = params.get("q") ?? ""
@@ -130,6 +134,7 @@ export function OverviewPage() {
     patchParams({ tag: value === "全部" ? null : value })
 
   const { loaded } = useFleetStatus()
+  const { settings } = useSettings()
   const selectedId = params.get("server")
   const selected = fleet.find((item) => item.id === selectedId) ?? null
 
@@ -350,7 +355,8 @@ export function OverviewPage() {
                         {item.name}
                       </Link>
                       <div className="truncate text-2xs text-subtle">
-                        {item.tags.join(" · ")}
+                        {/* 标签是配置，可能被「编辑标签」改过，不能直接读 mock */}
+                        {nodeTags(settings, item.id, item.tags).join(" · ")}
                       </div>
                     </div>
                   </TableCell>
@@ -419,6 +425,7 @@ export function OverviewPage() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            aria-label="更多操作"
                             className="size-6 text-muted-foreground touch:size-11"
                           >
                             <DotsThree className="size-3.5" />
@@ -430,7 +437,11 @@ export function OverviewPage() {
                         >
                           查看详情
                         </DropdownMenuItem>
-                        <DropdownMenuItem>编辑标签</DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => setEditingTags(item)}
+                        >
+                          编辑标签
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           variant="destructive"
@@ -466,6 +477,16 @@ export function OverviewPage() {
       >
         {selected && <ServerSheet server={selected} />}
       </Sheet>
+
+      {editingTags && (
+        <NodeTagsDialog
+          serverId={editingTags.id}
+          serverName={editingTags.name}
+          defaultTags={editingTags.tags}
+          open
+          onOpenChange={(open) => !open && setEditingTags(null)}
+        />
+      )}
 
       <ConfirmDialog
         open={removing !== null}

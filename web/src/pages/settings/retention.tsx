@@ -5,8 +5,8 @@ import {
   SettingsFooter,
   SettingsSection,
   useDraft,
-  useSettings,
 } from "@/components/settings-shell"
+import { useSettings } from "@/components/settings-provider"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
