@@ -50,3 +50,7 @@ Thumbs.db
 *.db-shm
 *.db-wal
 /data/
+
+# 临时脚本（用完即删，别混进仓库）
+tmp-*
+web/tmp-*
