@@ -67,6 +67,29 @@ test.describe("后台", () => {
     await waitForData(page)
     await expect(page).toHaveScreenshot("admin-sheet-light.png")
   })
+
+  /*
+    设置页此前完全没有快照保护，而 §AR 把四个子页全部重写了。
+    抽两张有代表性的整页：retention 是最复杂的（表格 + 危险区块），
+    access 有代码块与令牌表。
+  */
+  test("设置 · 数据与保留", async ({ page }) => {
+    await makeDeterministic(page)
+    await page.goto("/admin/settings/retention")
+    await waitForData(page)
+    await expect(page).toHaveScreenshot("admin-settings-retention.png", {
+      fullPage: true,
+    })
+  })
+
+  test("设置 · 接入与令牌", async ({ page }) => {
+    await makeDeterministic(page)
+    await page.goto("/admin/settings/access")
+    await waitForData(page)
+    await expect(page).toHaveScreenshot("admin-settings-access.png", {
+      fullPage: true,
+    })
+  })
 })
 
 /*
@@ -160,5 +183,20 @@ test.describe("元素级快照", () => {
     await expect(
       page.getByTestId("admin-table").locator("tbody tr").first(),
     ).toHaveScreenshot("el-admin-row.png", TIGHT)
+  })
+
+  /*
+    脏状态的保存条：这是本轮的核心行为，而"按钮变灰/文字变色"这类差异
+    只有元素级这层抓得到。先填一个字段让草稿偏离已保存值。
+  */
+  test("后台 · 设置保存条（有未保存改动）", async ({ page }) => {
+    await makeDeterministic(page)
+    await page.goto("/admin/settings/general")
+    await waitForData(page)
+    await page.fill("#site-name", "我的探针站")
+    await expect(page.getByTestId("settings-footer")).toHaveScreenshot(
+      "el-settings-footer-dirty.png",
+      TIGHT,
+    )
   })
 })

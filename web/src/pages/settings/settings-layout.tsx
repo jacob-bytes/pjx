@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from "react-router"
+import { SettingsProvider } from "@/components/settings-shell"
 import { cn } from "@/lib/utils"
 
 const ITEMS = [
@@ -9,28 +10,34 @@ const ITEMS = [
 ]
 
 export function SettingsLayout() {
+  /*
+    provider 放在这一层：四个子页共用同一份配置，
+    切换子页时不会各自持有一份互不相干的 state。
+  */
   return (
-    <div className="flex flex-col gap-6 md:flex-row">
-      <nav className="flex shrink-0 flex-row flex-wrap gap-0.5 md:w-[168px] md:flex-col">
-        {ITEMS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) =>
-              cn(
-                "flex h-8 items-center rounded-md px-2.5 text-xs text-muted-foreground transition-colors dur-2 hover:bg-muted hover:text-foreground",
-                isActive && "bg-accent font-medium text-foreground",
-              )
-            }
-          >
-            {item.label}
-          </NavLink>
-        ))}
-      </nav>
+    <SettingsProvider>
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <nav className="flex shrink-0 flex-row flex-wrap gap-0.5 lg:w-[168px] lg:flex-col">
+          {ITEMS.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                cn(
+                  "flex h-8 items-center rounded-md px-2.5 text-xs text-muted-foreground transition-colors dur-2 hover:bg-muted hover:text-foreground",
+                  isActive && "bg-accent font-medium text-foreground",
+                )
+              }
+            >
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
 
-      <div className="min-w-0 max-w-[720px] flex-1">
-        <Outlet />
+        <div className="min-w-0 flex-1">
+          <Outlet />
+        </div>
       </div>
-    </div>
+    </SettingsProvider>
   )
 }

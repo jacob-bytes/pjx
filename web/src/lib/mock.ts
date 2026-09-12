@@ -510,22 +510,8 @@ export const alertRules: AlertRule[] = [
   },
 ]
 
-export const agentTokens = [
-  {
-    id: "t-01",
-    name: "默认令牌",
-    created: "2025-08-12",
-    lastUsed: "刚刚",
-    token: "7f3a1c9e4b2d8a60c15e73f9b04d2a81",
-  },
-  {
-    id: "t-02",
-    name: "扩容预留",
-    created: "2025-09-01",
-    lastUsed: "从未使用",
-    token: "b2e05d18f7c94a36e0d2518c73f9b04d",
-  },
-]
+// agentTokens 已移到 lib/settings.ts：令牌是**配置**，不是监控数据，
+// 而且它现在真的会被写入（新建/撤销），不能再放在只读的 mock 里。
 
 let version = 0
 const listeners = new Set<() => void>()
