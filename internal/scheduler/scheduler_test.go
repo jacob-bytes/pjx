@@ -179,3 +179,35 @@ func (f *failingDispatcher) Dispatch(ctx context.Context, agentID string, spec p
 func (f *failingDispatcher) Online(agentID string) bool {
 	return true
 }
+
+func TestRunTaskNowDispatchesOnlineTargets(t *testing.T) {
+	db := &fakeStore{
+		tasks: []store.Task{{
+			ID: "t1", Name: "立即执行", Kind: "http", Target: "https://example.com",
+			Interval: 60, TimeoutMS: 1000, ScopeType: "all", Enabled: true,
+		}},
+		agents: []store.Agent{{ID: "a1"}, {ID: "a2"}},
+	}
+	dispatcher := &fakeDispatcher{online: map[string]bool{"a1": true, "a2": false}}
+	schedule := New(db, dispatcher, slog.New(slog.NewTextHandler(io.Discard, nil)), Options{Tick: time.Hour})
+
+	if err := schedule.Reload(context.Background()); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	dispatched, err := schedule.RunTaskNow(context.Background(), "t1")
+	if err != nil {
+		t.Fatalf("run now: %v", err)
+	}
+	if dispatched != 1 {
+		t.Fatalf("expected 1 dispatched agent, got %d", dispatched)
+	}
+
+	results := waitResults(t, db, 1)
+	if len(results) != 1 || results[0].AgentID != "a1" {
+		t.Fatalf("unexpected results: %+v", results)
+	}
+
+	if _, err := schedule.RunTaskNow(context.Background(), "missing"); err == nil {
+		t.Fatalf("expected missing task to error")
+	}
+}

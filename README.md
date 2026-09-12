@@ -146,9 +146,13 @@ agent 令牌在后台「接入与令牌」页创建，明文只显示一次。
 - GET /api/health
 - GET /api/public/overview（脱敏）
 - GET /api/events（SSE，每秒一条 tick，与节点数无关）
-- GET /api/public/series（历史序列，自动选层 + 降采样）
+- GET /api/public/series（自动选层 + 降采样；支持 view=percent 与 net 速率视图）
 - GET /api/public/probes（探测任务公开汇总）
+- GET /api/public/probes/{id}/series（单任务 + 单节点的延迟 / 丢包序列）
+- GET /api/public/agents/{id}/uptime（30 天在线率时间轴）
 - GET/POST /api/admin/tasks、GET/PUT/DELETE /api/admin/tasks/{id}（需登录）
+- POST /api/admin/tasks/{id}/run（立即执行一次）
+- GET/PUT/DELETE /api/admin/agents/{id}（别名 / 公开状态 / 标签 / 删除）
 - 任务调度：interval 下发、标签 / 指定节点、超时重试、run_id 去重
 - GET/POST /api/admin/alert-rules、GET/PUT/DELETE /api/admin/alert-rules/{id}（需登录）
 - GET /api/admin/alert-events、POST /api/admin/notify/test（需登录）

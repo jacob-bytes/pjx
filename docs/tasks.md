@@ -51,3 +51,22 @@ run_id 唯一，所以重连补发或重复上报天然去重。
 
 覆盖：标签目标解析、离线跳过、失败重试与 message、任务 CRUD、
 run_id 去重、24h 成功率与 p95 统计。
+
+## 立即执行
+
+`POST /api/admin/tasks/{id}/run` 会跳过 interval，立刻把任务下发给所有在线目标，
+返回本次实际下发数量。
+
+## 结果序列
+
+`GET /api/public/probes/{id}/series?agent=&metric=latency|loss&from=&to=&points=`
+
+- latency：只统计成功样本，桶内 avg / min / max
+- loss：桶内失败占比百分比
+- 数据直接来自 task_results；量大后再考虑加 task_stats_1m 聚合表
+
+## 节点管理
+
+- `GET /api/admin/agents` 列表
+- `PUT /api/admin/agents/{id}` 修改 alias / public / tags
+- `DELETE /api/admin/agents/{id}` 删除节点及其指标与任务结果

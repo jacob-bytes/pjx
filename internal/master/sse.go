@@ -73,6 +73,11 @@ func (s *Server) nextTick() tickPayload {
 			round2(node.Rx),
 			round2(node.Tx),
 			node.Status,
+			round2(node.Load),
+			node.Uptime,
+			node.TCP,
+			node.UDP,
+			node.Proc,
 		})
 	}
 	return tickPayload{Seq: seq, TS: time.Now().Unix(), A: rows}

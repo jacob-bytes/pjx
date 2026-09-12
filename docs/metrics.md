@@ -46,3 +46,21 @@ net_rx / net_tx 是累计计数器；速率由查询方按差值计算。
 
 覆盖：分钟桶切分、环形缓冲覆盖与范围查询、分层选择与步长、
 1m 幂等写入与降采样查询、1h 加权聚合、分批删除、表名白名单。
+
+## 视图参数
+
+- `mem` / `disk` / `swap` 默认返回百分比（`view=percent`，由 used/total 计算）；
+  `view=raw` 返回 used 字节（列名为 `_used`）
+- `net_rx` / `net_tx` 默认返回速率 MB/s（`rate=1`，按累计计数器差分）；
+  `rate=0` 或 `view=raw` 返回累计计数器
+- 其余指标为 raw
+- 响应新增 `view` 字段，取值 raw / percent / rate
+
+## 其他序列接口
+
+- `GET /api/public/probes/{id}/series?agent=&metric=latency|loss&from=&to=&points=`
+  - latency：只统计成功样本的延迟，返回桶内 avg / min / max
+  - loss：桶内失败占比百分比
+- `GET /api/public/agents/{id}/uptime?days=30`
+  - 用 metric_1m 的分钟桶覆盖数近似每日在线率
+  - 状态：none（无数据）/ partial / ok（不低于 99%）

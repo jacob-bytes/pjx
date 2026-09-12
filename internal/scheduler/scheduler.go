@@ -151,6 +151,30 @@ func (s *Scheduler) runDue(ctx context.Context) {
 	}
 }
 
+// RunTaskNow 立即把任务下发给所有在线目标，返回实际下发数量。
+func (s *Scheduler) RunTaskNow(ctx context.Context, taskID string) (int, error) {
+	s.mu.Lock()
+	task, ok := s.tasks[taskID]
+	s.mu.Unlock()
+	if ok == false {
+		return 0, fmt.Errorf("task %s not found", taskID)
+	}
+
+	agents, err := s.store.ListAgents(ctx)
+	if err != nil {
+		return 0, err
+	}
+	dispatched := 0
+	for _, agent := range resolveTargets(task, agents) {
+		if s.dispatcher.Online(agent.ID) == false {
+			continue
+		}
+		dispatched++
+		go s.dispatchOne(ctx, task, agent.ID)
+	}
+	return dispatched, nil
+}
+
 func (s *Scheduler) dispatchTask(ctx context.Context, task store.Task) {
 	agents, err := s.store.ListAgents(ctx)
 	if err != nil {

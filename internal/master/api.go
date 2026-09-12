@@ -111,6 +111,12 @@ func (s *Server) handlePublicSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	baseMetric, mode, message := resolveSeriesSpec(metric, query.Get("view"), query.Get("rate"))
+	if message != "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": message})
+		return
+	}
+
 	now := time.Now()
 	to := parseInt64(query.Get("to"), now.Unix())
 	from := parseInt64(query.Get("from"), to-3600)
@@ -131,45 +137,89 @@ func (s *Server) handlePublicSeries(w http.ResponseWriter, r *http.Request) {
 	oneMinKeep := config.ParseDuration(s.cfg.Retention.OneMinKeep, 14*24*time.Hour)
 	tier := metrics.ChooseTier(now, time.Unix(from, 0), memoryKeep, oneMinKeep)
 
-	switch tier {
-	case metrics.TierMemory:
+	if tier == metrics.TierMemory {
 		ring, ok := s.pipeline.Rings().Get(agentID)
 		if ok == false {
 			writeJSON(w, http.StatusOK, map[string]any{
-				"agent_id": agentID,
-				"metric":   metric,
-				"tier":     tier,
-				"points":   []metrics.Point{},
+				"agent_id": agentID, "metric": metric, "view": mode, "tier": tier,
+				"step": 1, "points": []metrics.Point{},
 			})
 			return
 		}
-		result := metrics.DownsampleMemory(ring.Range(from), metric, from, to, points)
-		writeJSON(w, http.StatusOK, map[string]any{
-			"agent_id": agentID,
-			"metric":   metric,
-			"tier":     tier,
-			"step":     1,
-			"points":   result,
-		})
-	default:
-		floor := int64(60)
-		if tier == metrics.Tier1h {
-			floor = 3600
-		}
-		step := metrics.StepSeconds(from, to, points, floor)
-		result, err := s.store.QuerySeries(r.Context(), string(tier), agentID, metric, from, to, step)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
+		samples := ring.Range(from)
+		var result []metrics.Point
+		switch mode {
+		case "percent":
+			result = metrics.DownsampleValues(metrics.PercentValues(samples, baseMetric), from, to, points)
+		case "rate":
+			result = metrics.DownsampleValues(metrics.RateValues(samples, baseMetric), from, to, points)
+		default:
+			result = metrics.DownsampleValues(metrics.ValuePointsFromSamples(samples, baseMetric), from, to, points)
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"agent_id": agentID,
-			"metric":   metric,
-			"tier":     tier,
-			"step":     step,
-			"points":   result,
+			"agent_id": agentID, "metric": metric, "view": mode, "tier": tier,
+			"step": 1, "points": result,
 		})
+		return
 	}
+
+	floor := int64(60)
+	if tier == metrics.Tier1h {
+		floor = 3600
+	}
+	step := metrics.StepSeconds(from, to, points, floor)
+
+	var result []metrics.Point
+	var err error
+	switch mode {
+	case "percent":
+		used, usedErr := s.store.QuerySeries(r.Context(), string(tier), agentID, baseMetric+"_used", from, to, step)
+		total, totalErr := s.store.QuerySeries(r.Context(), string(tier), agentID, baseMetric+"_total", from, to, step)
+		if usedErr != nil {
+			err = usedErr
+		} else if totalErr != nil {
+			err = totalErr
+		} else {
+			result = metrics.PercentPoints(used, total)
+		}
+	case "rate":
+		raw, rawErr := s.store.QuerySeries(r.Context(), string(tier), agentID, baseMetric, from, to, step)
+		if rawErr != nil {
+			err = rawErr
+		} else {
+			result = metrics.ToRate(raw)
+		}
+	default:
+		result, err = s.store.QuerySeries(r.Context(), string(tier), agentID, baseMetric, from, to, step)
+	}
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"agent_id": agentID, "metric": metric, "view": mode, "tier": tier,
+		"step": step, "points": result,
+	})
+}
+
+func resolveSeriesSpec(metric, view, rate string) (string, string, string) {
+	switch metric {
+	case "mem", "disk", "swap":
+		if view == "raw" {
+			return metric + "_used", "raw", ""
+		}
+		return metric, "percent", ""
+	case metrics.KeyNetRx, metrics.KeyNetTx:
+		if rate == "0" || view == "raw" {
+			return metric, "raw", ""
+		}
+		return metric, "rate", ""
+	}
+	if metrics.Known(metric) == false {
+		return "", "", "unsupported metric: " + metric
+	}
+	return metric, "raw", ""
 }
 
 func parseInt64(value string, fallback int64) int64 {
@@ -267,7 +317,28 @@ func (s *Server) handleAdminTasks(w http.ResponseWriter, r *http.Request) {
 
 // handleAdminTaskByID 支持 GET（详情 + 最近结果）、PUT（更新）、DELETE（删除）。
 func (s *Server) handleAdminTaskByID(w http.ResponseWriter, r *http.Request) {
-	id := strings.TrimPrefix(r.URL.Path, "/api/admin/tasks/")
+	rest := strings.TrimPrefix(r.URL.Path, "/api/admin/tasks/")
+	if strings.HasSuffix(rest, "/run") {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", "POST")
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		id := strings.TrimSuffix(rest, "/run")
+		if id == "" || strings.Contains(id, "/") {
+			http.NotFound(w, r)
+			return
+		}
+		dispatched, err := s.scheduler.RunTaskNow(r.Context(), id)
+		if err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "dispatched": dispatched})
+		return
+	}
+
+	id := rest
 	if id == "" || strings.Contains(id, "/") {
 		http.NotFound(w, r)
 		return
@@ -556,4 +627,152 @@ func (s *Server) handleAdminNotifyTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// handlePublicProbeSeries 处理 /api/public/probes/{id}/series。
+// 参数：agent、metric（latency|loss）、from、to、points。
+func (s *Server) handlePublicProbeSeries(w http.ResponseWriter, r *http.Request) {
+	rest := strings.TrimPrefix(r.URL.Path, "/api/public/probes/")
+	parts := strings.Split(rest, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] != "series" {
+		http.NotFound(w, r)
+		return
+	}
+	taskID := parts[0]
+
+	query := r.URL.Query()
+	agentID := query.Get("agent")
+	if agentID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "agent is required"})
+		return
+	}
+	metric := query.Get("metric")
+	if metric == "" {
+		metric = "latency"
+	}
+	if metric != "latency" && metric != "loss" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "metric must be latency or loss"})
+		return
+	}
+
+	now := time.Now()
+	to := parseInt64(query.Get("to"), now.Unix())
+	from := parseInt64(query.Get("from"), to-24*3600)
+	if from >= to {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "from must be earlier than to"})
+		return
+	}
+	points := int(parseInt64(query.Get("points"), 180))
+	if points < 2 {
+		points = 2
+	}
+	if points > 2000 {
+		points = 2000
+	}
+
+	step := metrics.StepSeconds(from, to, points, 10)
+	result, err := s.store.QueryTaskSeries(r.Context(), taskID, agentID, metric, from, to, step)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"task_id":  taskID,
+		"agent_id": agentID,
+		"metric":   metric,
+		"step":     step,
+		"points":   result,
+	})
+}
+
+// handlePublicUptime 处理 /api/public/agents/{id}/uptime?days=30。
+func (s *Server) handlePublicUptime(w http.ResponseWriter, r *http.Request) {
+	rest := strings.TrimPrefix(r.URL.Path, "/api/public/agents/")
+	parts := strings.Split(rest, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] != "uptime" {
+		http.NotFound(w, r)
+		return
+	}
+	agentID := parts[0]
+	days := int(parseInt64(r.URL.Query().Get("days"), 30))
+	result, err := s.store.QueryUptimeDays(r.Context(), agentID, days)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"agent_id": agentID,
+		"days":     result,
+	})
+}
+
+// handleAdminAgentByID 支持 GET / PUT / DELETE。
+func (s *Server) handleAdminAgentByID(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/api/admin/agents/")
+	if id == "" || strings.Contains(id, "/") {
+		http.NotFound(w, r)
+		return
+	}
+
+	findAgent := func() (store.Agent, bool) {
+		agents, err := s.store.ListAgents(r.Context())
+		if err != nil {
+			return store.Agent{}, false
+		}
+		for _, agent := range agents {
+			if agent.ID == id {
+				return agent, true
+			}
+		}
+		return store.Agent{}, false
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		agent, ok := findAgent()
+		if ok == false {
+			http.NotFound(w, r)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"agent": agent})
+	case http.MethodPut:
+		agent, ok := findAgent()
+		if ok == false {
+			http.NotFound(w, r)
+			return
+		}
+		var body struct {
+			Alias  *string   `json:"alias"`
+			Public *bool     `json:"public"`
+			Tags   *[]string `json:"tags"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+		if body.Alias != nil {
+			agent.Alias = *body.Alias
+		}
+		if body.Public != nil {
+			agent.Public = *body.Public
+		}
+		if body.Tags != nil {
+			agent.Tags = *body.Tags
+		}
+		if err := s.store.UpdateAgent(r.Context(), agent.ID, agent.Alias, agent.Public, agent.Tags); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"agent": agent})
+	case http.MethodDelete:
+		if err := s.store.DeleteAgent(r.Context(), id); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		s.hub.Remove(id)
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	default:
+		w.Header().Set("Allow", "GET, PUT, DELETE")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }

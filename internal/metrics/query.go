@@ -36,7 +36,7 @@ func StepSeconds(from, to int64, maxPoints int, floor int64) int64 {
 	if span <= 0 {
 		return floor
 	}
-	step := span / int64(maxPoints)
+	step := (span + int64(maxPoints) - 1) / int64(maxPoints)
 	if step < floor {
 		step = floor
 	}

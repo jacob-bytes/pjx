@@ -134,15 +134,20 @@ func (h *Hub) CleanupStale(timeout time.Duration) {
 
 // SnapshotNode 是给公网 / SSE 用的脱敏快照。
 type SnapshotNode struct {
-	ID     string  `json:"id"`
-	Name   string  `json:"name"`
-	Status string  `json:"status"`
-	CPU    float64 `json:"cpu"`
-	Mem    float64 `json:"mem"`
-	Disk   float64 `json:"disk"`
-	Rx     float64 `json:"rx"`
-	Tx     float64 `json:"tx"`
-	Uptime uint64  `json:"uptime"`
+	ID     string   `json:"id"`
+	Name   string   `json:"name"`
+	Status string   `json:"status"`
+	CPU    float64  `json:"cpu"`
+	Mem    float64  `json:"mem"`
+	Disk   float64  `json:"disk"`
+	Rx     float64  `json:"rx"`
+	Tx     float64  `json:"tx"`
+	Load   float64  `json:"load"`
+	Uptime uint64   `json:"uptime"`
+	TCP    int      `json:"tcp"`
+	UDP    int      `json:"udp"`
+	Proc   int      `json:"proc"`
+	Tags   []string `json:"tags,omitempty"`
 }
 
 // Snapshot 返回当前所有在线节点的脱敏状态。
@@ -156,9 +161,10 @@ func (h *Hub) Snapshot() []SnapshotNode {
 		name := session.Name
 		rx := session.RxRate
 		tx := session.TxRate
+		tags := session.Hello.Tags
 		session.mu.Unlock()
 
-		node := SnapshotNode{ID: session.ID, Name: name, Status: "off"}
+		node := SnapshotNode{ID: session.ID, Name: name, Status: "off", Tags: tags}
 		if hasLatest {
 			node.Status = statusOf(sample)
 			node.CPU = sample.CPU
@@ -166,7 +172,11 @@ func (h *Hub) Snapshot() []SnapshotNode {
 			node.Disk = percentOf(sample.DiskUsed, sample.DiskTotal)
 			node.Rx = rx
 			node.Tx = tx
+			node.Load = sample.Load
 			node.Uptime = sample.Uptime
+			node.TCP = sample.TCP
+			node.UDP = sample.UDP
+			node.Proc = sample.Proc
 		}
 		out = append(out, node)
 	}
