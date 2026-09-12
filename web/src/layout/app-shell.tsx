@@ -4,10 +4,11 @@ import {
   ArrowSquareOut,
   Bell,
   Broadcast,
-  CaretUpDown,
+  CaretRight,
   Gear,
   List,
   MagnifyingGlass,
+  SidebarSimple,
   Waveform,
 } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
@@ -72,11 +73,9 @@ function useCrumbs(pathname: string) {
  */
 function SidebarNav({
   onNavigate,
-  onToggle,
   collapsed = false,
 }: {
   onNavigate?: () => void
-  onToggle?: () => void
   collapsed?: boolean
 }) {
   return (
@@ -96,28 +95,9 @@ function SidebarNav({
         <span className="grid size-5 shrink-0 place-items-center rounded-[5px] bg-foreground font-mono text-2xs font-semibold text-background">
           p
         </span>
-        {!collapsed && (
-          <span className="truncate text-sm font-semibold tracking-tight">
-            pjx
-          </span>
-        )}
-        {onToggle && (
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-expanded={!collapsed}
-            aria-label={collapsed ? "展开侧栏" : "折叠侧栏"}
-            title={collapsed ? "展开侧栏（⌘B）" : "折叠侧栏（⌘B）"}
-            className={cn(
-              "grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground",
-              "transition-colors dur-2 hover:bg-muted hover:text-foreground",
-              // 展开时推到最右（贴着侧栏边界，也就是与面包屑之间的那条分隔线）
-              !collapsed && "ml-auto",
-            )}
-          >
-            <CaretUpDown className="size-3.5" />
-          </button>
-        )}
+        <span className="truncate text-sm font-semibold tracking-tight">
+          pjx
+        </span>
       </div>
 
       <nav className="flex flex-col gap-0.5 p-2">
@@ -237,9 +217,6 @@ export function AppShell() {
 
   const crumbs = useCrumbs(location.pathname)
   const current = crumbs[crumbs.length - 1]
-  const SectionIcon =
-    NAV.find((item) => item.key === (location.pathname.split("/")[1] ?? ""))
-      ?.icon ?? Waveform
 
   return (
     /*
@@ -252,10 +229,7 @@ export function AppShell() {
           className="fixed inset-y-0 left-0 z-30 hidden flex-col border-r bg-card transition-[width] dur-3 md:flex"
           style={{ width: collapsed ? RAIL_W : SIDEBAR_W }}
         >
-          <SidebarNav
-            collapsed={collapsed}
-            onToggle={toggleSidebar}
-          />
+          <SidebarNav collapsed={collapsed} />
         </aside>
 
         {/* 移动端导航：md 以下没有侧边栏，用抽屉补上 */}
@@ -292,11 +266,27 @@ export function AppShell() {
             </Button>
 
             {/*
-              面包屑：图标 + 路径。图标取当前分区的导航图标，与侧栏一一对应。
-              视觉上与侧栏之间的那条 `｜` 就是侧栏的 border-r —— 折叠按钮在侧栏头部
-              的右端，紧贴着这条线。
+              折叠按钮 + `｜` + 面包屑（对齐参考图）。
+              `SidebarSimple` 就是那个"▯｜"图标；分隔线是顶栏里的一个字面竖线，
+              不是靠侧栏边框 —— 参考图里两者是同一个视觉组。
+              移动端没有折叠概念（侧栏是抽屉），所以按钮与分隔线都只在 md 以上出现。
             */}
-            <SectionIcon className="size-4 shrink-0 text-muted-foreground" />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleSidebar}
+              aria-expanded={!collapsed}
+              aria-label={collapsed ? "展开侧栏" : "折叠侧栏"}
+              title={collapsed ? "展开侧栏（⌘B）" : "折叠侧栏（⌘B）"}
+              className="hidden size-8 shrink-0 text-muted-foreground touch:size-11 md:inline-flex"
+            >
+              <SidebarSimple className="size-4" />
+            </Button>
+            <span
+              aria-hidden
+              className="hidden h-4 w-px shrink-0 bg-border md:block"
+            />
+
             <nav aria-label="面包屑" className="min-w-0">
               <ol className="flex min-w-0 items-center gap-1.5 text-sm">
                 {crumbs.map((crumb, index) => (
@@ -305,9 +295,10 @@ export function AppShell() {
                     className="flex min-w-0 items-center gap-1.5"
                   >
                     {index > 0 && (
-                      <span aria-hidden className="shrink-0 text-subtle">
-                        /
-                      </span>
+                      <CaretRight
+                        aria-hidden
+                        className="size-3 shrink-0 text-subtle"
+                      />
                     )}
                     {crumb.to ? (
                       <Link

@@ -130,7 +130,10 @@ test.describe("后台", () => {
     const sideW = () =>
       page.locator("aside").evaluate((el) => Math.round(el.getBoundingClientRect().width))
 
-    await expect(page.locator('nav[aria-label="面包屑"]')).toHaveText("总览")
+    // 分隔符现在是 › 图标（aria-hidden），所以断言列表项本身 ——
+    // 结构上仍是 ol/li，读屏按列表项播报，不依赖那个视觉分隔符
+    const crumbs = page.locator('nav[aria-label="面包屑"] li')
+    await expect(crumbs).toHaveText(["总览"])
     expect(await sideW()).toBe(216)
 
     // 宽度是过渡出来的（dur-3 = 240ms），所以用 poll 而不是立刻断言
@@ -147,9 +150,7 @@ test.describe("后台", () => {
     await expect.poll(sideW).toBe(216)
     await page.goto("/admin/settings/retention")
     await waitForData(page)
-    await expect(page.locator('nav[aria-label="面包屑"]')).toHaveText(
-      "设置/数据与保留",
-    )
+    await expect(crumbs).toHaveText(["设置", "数据与保留"])
   })
 
   test("后台 · 侧栏折叠后的样子", async ({ page }) => {
