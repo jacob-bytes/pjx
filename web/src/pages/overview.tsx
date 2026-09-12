@@ -97,31 +97,34 @@ export function OverviewPage() {
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        <span>
-          在线{" "}
-          <b className="num font-medium text-foreground">
-            {online}
-          </b>{" "}
-          / {fleet.length}
-        </span>
-        <span className="text-border">|</span>
-        <span>
-          告警 <b className="num font-medium text-warn-text">{firing}</b>
-        </span>
-        <span className="text-border">|</span>
-        <span>
-          平均 CPU <b className="num font-medium text-foreground">{pct(avgCpu)}</b>
-        </span>
-        <span className="text-border">|</span>
-        <span>
-          入站 <b className="num font-medium text-foreground">{rate(totalRx)}</b> MB/s
-        </span>
-        <span className="text-border">|</span>
-        <span>
-          出站 <b className="num font-medium text-foreground">{rate(totalTx)}</b> MB/s
-        </span>
-      </div>
+        {/*
+          统计条：标签在上、数值在下，数值用 text-sm font-semibold + num，
+          标签用 text-2xs text-subtle —— 形成两级层级，一眼能扫出数字。
+
+          改前是「在线 <b>11</b> / 12 | 告警 <b>3</b> | …」一串行内文本：
+          数字与标签同为 text-xs font-medium（没有层级、扫不出数），
+          5 个 text-border 的竖线分隔符对比度极低，纯粹是视觉噪声。
+        */}
+        <dl className="flex flex-wrap items-start gap-x-6 gap-y-2">
+          {[
+            { label: "在线", value: `${online} / ${fleet.length}` },
+            { label: "告警", value: String(firing), warn: firing > 0 },
+            { label: "平均 CPU", value: pct(avgCpu) },
+            { label: "入站", value: `${rate(totalRx)} MB/s` },
+            { label: "出站", value: `${rate(totalTx)} MB/s` },
+          ].map((item) => (
+            <div key={item.label} className="flex flex-col gap-0.5">
+              <dt className="text-2xs text-subtle">{item.label}</dt>
+              <dd
+                className={`num text-sm font-semibold tracking-tight ${
+                  item.warn ? "text-warn-text" : "text-foreground"
+                }`}
+              >
+                {item.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
 
       <div className="mb-3 mt-3 flex flex-wrap items-center gap-2">
         <div className="relative">
