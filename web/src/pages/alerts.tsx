@@ -19,6 +19,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { alertEvents, alertRules, type AlertRule } from "@/lib/mock"
 import { pickParam } from "@/lib/url"
+import { TABLE_SCROLLER } from "@/lib/layout"
 import { cn } from "@/lib/utils"
 
 const LEVEL_LABEL = { crit: "严重", warn: "警告", info: "信息" } as const
@@ -141,8 +142,8 @@ export function AlertsPage() {
             }
           />
         ) : (
-            <div className="-mx-5 max-h-[calc(100svh-11rem)] overflow-auto px-5">
-              <Table className="min-w-[880px]">
+            <div className={TABLE_SCROLLER}>
+              <Table className="min-w-[660px]">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="num h-8 px-3 text-xs font-medium">时间</TableHead>
@@ -191,7 +192,7 @@ export function AlertsPage() {
                             : "text-subtle",
                         )}
                       >
-                        {event.state === "firing" ? "Firing" : "Resolved"}
+                        {event.state === "firing" ? "触发中" : "已恢复"}
                       </Badge>
                     </TableCell>
                     <TableCell className="num h-9 px-3 text-right text-xs text-muted-foreground">
@@ -215,8 +216,8 @@ export function AlertsPage() {
       </TabsContent>
 
       <TabsContent value="rules" className="mt-0">
-        <div className="-mx-5 max-h-[calc(100svh-11rem)] overflow-auto px-5">
-          <Table className="min-w-[840px]">
+        <div className={TABLE_SCROLLER}>
+          <Table className="min-w-[570px]">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="h-8 px-3 text-xs font-medium">规则</TableHead>

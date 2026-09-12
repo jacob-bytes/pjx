@@ -147,7 +147,7 @@ export function AppShell() {
           <Button
             variant="ghost"
             size="icon"
-            className="size-8 shrink-0 text-muted-foreground md:hidden"
+            className="size-8 shrink-0 text-muted-foreground touch:size-11 md:hidden"
             onClick={() => setNavOpen(true)}
             aria-label="打开导航"
           >

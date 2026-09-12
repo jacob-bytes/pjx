@@ -9,7 +9,7 @@ export function ThemeToggle() {
     <Button
       variant="ghost"
       size="icon"
-      className="size-8 text-muted-foreground"
+      className="size-8 text-muted-foreground touch:size-11"
       onClick={() => setDark(!dark)}
       aria-label={dark ? "切换到浅色" : "切换到深色"}
     >

@@ -13,12 +13,9 @@ import {
 import { toast } from "sonner"
 import { EmptyState } from "@/components/empty-state"
 import { Segmented } from "@/components/segmented"
+import { MaintenanceSwitch } from "@/components/maintenance-switch"
 import { NodeTagsDialog } from "@/components/node-tags-dialog"
-import {
-  nodeMaintenance,
-  nodeTags,
-  useSettings,
-} from "@/components/settings-provider"
+import { nodeTags, useSettings } from "@/components/settings-provider"
 import { ServerSheet } from "@/components/server-sheet"
 import { StatusDot } from "@/components/status-dot"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
@@ -52,6 +49,7 @@ import {
 } from "@/lib/mock"
 import { METRIC_LIMITS } from "@/lib/settings"
 import { pickParam } from "@/lib/url"
+import { TABLE_SCROLLER } from "@/lib/layout"
 import { cn } from "@/lib/utils"
 
 const TAGS = ["全部", "生产", "备用", "香港", "东京", "新加坡"] as const
@@ -392,7 +390,8 @@ export function OverviewPage() {
                 variant="raised"
                 active={tag === item}
                 onClick={() => setTag(item)}
-                className="h-7"
+                /* 触屏下撑到 44px（与前台分类胶囊一致：那边写的是 h-7 touch:h-11） */
+                className="h-7 touch:h-11"
               >
                 {item}
               </ToggleChip>
@@ -429,7 +428,7 @@ export function OverviewPage() {
           }
         />
       ) : (
-          <div className="-mx-5 max-h-[calc(100svh-11rem)] overflow-auto px-5">
+          <div className={TABLE_SCROLLER}>
             {/*
               列宽改成显式指定 + table-fixed，并且**按实测文字宽度给足**。
 
@@ -457,17 +456,23 @@ export function OverviewPage() {
               （试过让操作列 sticky 吸附右侧来容忍滚动 —— 实测它会盖住
                 60s 心跳条最右 44px，比滚动条更糟，已放弃。）
             */}
-            <Table data-testid="admin-table" className="min-w-[704px] table-fixed">
-              <colgroup>
-                <col className="w-10" />
-                {/* 不写宽度 = 吸收剩余 */}
-                <col />
-                <col className="w-[164px]" />
-                <col className="w-[84px]" />
-                <col className="w-[92px]" />
-                <col className="w-[104px]" />
-                <col className="w-11" />
-              </colgroup>
+            {/*
+              回到 auto 布局 + `min-w`。
+
+              §AQ 当年从 auto 改成 table-fixed，是因为**那时有 CPU/内存/磁盘 三列进度条**
+              需要保证宽度（内容驱动下它们只剩 35/24px）。§AT 把那些列搬走之后，
+              这个理由就不存在了，而 table-fixed 留下一个副作用：
+              「节点」是唯一没有写死宽度的列 → 它把全部余量吃掉。
+
+              实测：表格内容的自然宽度只有 **704px**，容器 1024px ——
+              于是 320px 的余量全堆进节点列（496px 装 176px 的内容，右侧一大片空白）。
+              auto 布局会把这 320px **按各列的自然宽度成比例摊开**，
+              每列大约多 45%，读起来是"列宽宽松"而不是"某一列空了一块"。
+
+              min-w 取自然宽度：容器比它窄时（≤768）表格横向滚动，
+              且**任何一列都不会被压到内容宽度以下** —— 这正是 §AQ 那次的教训。
+            */}
+            <Table data-testid="admin-table" className="min-w-[716px]">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="h-9 px-3" />
@@ -476,6 +481,8 @@ export function OverviewPage() {
                   地址 / 系统
                 </TableHead>
                 <TableHead className="h-9 px-3 text-xs font-medium">agent</TableHead>
+                {/* 维护是配置，直接在列表里开关（行内开关 = 改完立即生效） */}
+                <TableHead className="h-9 px-3 text-xs font-medium">维护</TableHead>
                 <TableHead className="h-9 px-3 text-right text-xs font-medium">
                   最后上报
                 </TableHead>
@@ -519,15 +526,6 @@ export function OverviewPage() {
                         {/* 标签是配置，可能被「编辑标签」改过，不能直接读 mock */}
                         {nodeTags(settings, item.id, item.tags).join(" · ")}
                       </span>
-                      {/*
-                        §AS 加的「维护模式」此前在列表里看不到。
-                        用中性徽章而不是琥珀：维护是**有意为之**，不是告警。
-                      */}
-                      {nodeMaintenance(settings, item.id) && (
-                        <ToneBadge tone="neutral" className="shrink-0" title="告警已静音">
-                          维护中
-                        </ToneBadge>
-                      )}
                     </div>
                   </TableCell>
                   <TableCell className="h-11 px-3">
@@ -566,6 +564,13 @@ export function OverviewPage() {
                     >
                       v{item.agent}
                     </ToneBadge>
+                  </TableCell>
+                  <TableCell
+                    className="h-11 px-3"
+                    // 行本身可点击（打开面板），开关不能把它一起触发
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <MaintenanceSwitch server={item} />
                   </TableCell>
                   <TableCell className="h-11 px-3">
                     {/* 离线时"多久没上报"才是要看的数 —— 用 crit 徽章顶出来 */}

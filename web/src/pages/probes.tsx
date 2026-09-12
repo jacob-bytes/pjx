@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/table"
 import { probes, useFleetTick, type Probe } from "@/lib/mock"
 import { createToken, type CreatedProbe } from "@/lib/settings"
+import { TABLE_SCROLLER } from "@/lib/layout"
 import { cn } from "@/lib/utils"
 
 const INTERVALS = [
@@ -597,8 +598,8 @@ export function ProbesPage() {
           }
         />
       ) : (
-        <div className="-mx-5 max-h-[calc(100svh-11rem)] overflow-auto px-5">
-          <Table className="min-w-[1040px]">
+        <div className={TABLE_SCROLLER}>
+          <Table className="min-w-[1000px]">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="h-8 px-3 text-xs font-medium">状态</TableHead>

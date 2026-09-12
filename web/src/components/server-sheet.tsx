@@ -1,13 +1,9 @@
 import { useState, type ReactNode } from "react"
 import { ArrowSquareOut, Copy, DotsThree } from "@phosphor-icons/react"
 import { toast } from "sonner"
+import { MaintenanceSwitch } from "@/components/maintenance-switch"
 import { NodeTagsDialog } from "@/components/node-tags-dialog"
-import {
-  nodeMaintenance,
-  nodeTags,
-  useNodeConfig,
-  useSettings,
-} from "@/components/settings-provider"
+import { nodeMaintenance, nodeTags, useSettings } from "@/components/settings-provider"
 import { StatusDot } from "@/components/status-dot"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
@@ -25,7 +21,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { alertEvents, fleet, type Server } from "@/lib/mock"
 import { cn } from "@/lib/utils"
@@ -92,30 +87,6 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
   )
 }
 
-/**
- * 维护模式的开关。行内开关 = 改完立即生效（不需要再按"保存"）。
- * 单独抽出来是因为要调 `useNodeConfig` —— hook 不能写在 JSX 的表达式里。
- */
-function MaintenanceSwitch({ server }: { server: Server }) {
-  const { maintenance, setMaintenance } = useNodeConfig(server.id, {
-    tags: server.tags,
-  })
-  return (
-    <Switch
-      checked={maintenance}
-      onCheckedChange={(checked) => {
-        setMaintenance(checked)
-        toast(
-          checked
-            ? `「${server.name}」进入维护模式，告警已静音`
-            : `「${server.name}」退出维护模式`,
-        )
-      }}
-      aria-label={`维护模式 ${server.name}`}
-    />
-  )
-}
-
 export function ServerSheet({ server }: { server: Server }) {
   const [copied, setCopied] = useState(false)
   const [removing, setRemoving] = useState(false)
@@ -140,7 +111,13 @@ export function ServerSheet({ server }: { server: Server }) {
 
   return (
     <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-[520px]">
-      <SheetHeader className="gap-0 border-b px-5 py-4">
+      {/*
+        右侧要留出内置关闭按钮的位置：`SheetContent` 的关闭按钮固定
+        `absolute top-4 right-4`（16px 宽），而这一行的「复制 IP + ⋯」原来只留了
+        pr-5 —— 实测 ⋯ 占 x 1232..1260、关闭 × 占 1248..1264，**重叠 12×16px**，
+        两个图标糊在一起。pr-12 让它们彻底分开。
+      */}
+      <SheetHeader className="gap-0 border-b py-4 pl-5 pr-12">
         <div className="flex items-center gap-2">
           <StatusDot status={server.status} />
           <SheetTitle className="text-base font-semibold">
@@ -326,7 +303,7 @@ export function ServerSheet({ server }: { server: Server }) {
                             : "text-subtle",
                         )}
                       >
-                        {event.state === "firing" ? "Firing" : "Resolved"}
+                        {event.state === "firing" ? "触发中" : "已恢复"}
                       </Badge>
                     </div>
                     <div className="num mt-1.5 text-2xs text-subtle">
