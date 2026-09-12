@@ -1,0 +1,26 @@
+#!/bin/sh
+#
+# 提交前门禁。
+#
+# 存在的原因很具体：曾经把「改过的页脚源码 + 旧基线」一起提交了 ——
+# 改完源码忘了重跑视觉回归，仓库里就留下一份自相矛盾的状态。
+# 这类错误靠自觉是防不住的，交给钩子。
+#
+# 绕过（确实需要时）：git commit --no-verify
+
+set -e
+
+# 只在 web/ 有改动时才跑。只改文档还跑一遍视觉回归是纯浪费。
+if ! git diff --cached --name-only | grep -q '^web/'; then
+  exit 0
+fi
+
+echo "→ 提交前检查（web/ 有改动）"
+
+if [ ! -d web/node_modules ]; then
+  echo "✗ web/node_modules 不存在，先跑 npm install" >&2
+  exit 1
+fi
+
+cd web
+npm run --silent verify

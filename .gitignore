@@ -1,0 +1,52 @@
+# ---- 依赖 ----
+node_modules/
+.pnpm-store/
+
+# ---- 构建产物 ----
+dist/
+build/
+*.tsbuildinfo
+.vite/
+
+# ---- 测试产物 ----
+# Playwright 的失败快照与报告：只应提交 tests/**/*-snapshots/ 下的基线
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# ---- 环境与密钥 ----
+# 这个项目会开源，密钥绝不入库
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.keystore
+secrets/
+
+# ---- 日志与临时文件 ----
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.DS_Store
+Thumbs.db
+*.swp
+
+# ---- 编辑器 ----
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.iml
+
+# ---- Go（master / agent，尚未开始）----
+# 二进制与本地数据：SQLite WAL 是运行时状态，不入库
+/master/master
+/agent/agent
+*.db
+*.db-shm
+*.db-wal
+/data/

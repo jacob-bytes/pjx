@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f9fafc" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0c0d10" media="(prefers-color-scheme: dark)" />
+    <title>pjx · 管理</title>
+    <script>
+      // 首帧前定主题，避免深色偏好闪白。与 src/lib/theme.ts 共用 pjx-theme 键。
+      try {
+        if (localStorage.getItem("pjx-theme") === "dark") {
+          document.documentElement.classList.add("dark")
+        }
+        if (localStorage.getItem("pjx-cvd") === "on") {
+          document.documentElement.dataset.cvd = "on"
+        }
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main-admin.tsx"></script>
+  </body>
+</html>
