@@ -136,4 +136,29 @@ test.describe("元素级快照", () => {
       page.locator('svg[aria-label="CPU 使用率与负载"]'),
     ).toHaveScreenshot("el-chart-cpu.png", TIGHT)
   })
+
+  /*
+    后台的两处元素快照。
+    总览表格的「数值 + 进度条」是 44 轮刚统一的表达（CPU/内存/磁盘三列），
+    而统计条是 40 轮的产物 —— 两者在整页快照里都只占几百像素，
+    落在 3500 的阈值之下，只有元素级这一层抓得到。
+  */
+  test("后台 · 统计条", async ({ page }) => {
+    await makeDeterministic(page)
+    await page.goto("/admin/")
+    await waitForData(page)
+    await expect(page.getByTestId("admin-stats")).toHaveScreenshot(
+      "el-admin-stats.png",
+      TIGHT,
+    )
+  })
+
+  test("后台 · 首行（指标进度条）", async ({ page }) => {
+    await makeDeterministic(page)
+    await page.goto("/admin/")
+    await waitForData(page)
+    await expect(
+      page.getByTestId("admin-table").locator("tbody tr").first(),
+    ).toHaveScreenshot("el-admin-row.png", TIGHT)
+  })
 })

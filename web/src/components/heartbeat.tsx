@@ -24,7 +24,14 @@ export function Heartbeat({
   return (
     <svg
       viewBox="0 0 120 16"
-      className={cn("h-4 w-[120px] shrink-0", className)}
+      /*
+        preserveAspectRatio="none" + 104px：**只压缩横向**。
+        60 根柱子在 viewBox 里是 120 宽，渲染到 104px 后每根 1.39px（原 1.6px），
+        密度观感不变，但整列从 144px 降到 120px —— 腾出的 24px 给了
+        「地址」和「系统」两列，那两列改前放不下自己的文字。
+      */
+      preserveAspectRatio="none"
+      className={cn("h-4 w-[104px] shrink-0", className)}
       aria-hidden
     >
       {bars.map((status, index) => {

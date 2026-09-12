@@ -6,8 +6,8 @@ import { toast } from "sonner"
 import { EmptyState } from "@/components/empty-state"
 import { Segmented } from "@/components/segmented"
 import { Heartbeat } from "@/components/heartbeat"
+import { ResourceBar } from "@/components/resource-bar"
 import { ServerSheet } from "@/components/server-sheet"
-import { Sparkline } from "@/components/sparkline"
 import { StatusDot } from "@/components/status-dot"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
@@ -35,6 +35,69 @@ import { pickParam } from "@/lib/url"
 import { cn } from "@/lib/utils"
 
 const TAGS = ["全部", "生产", "备用", "香港", "东京", "新加坡"] as const
+
+/*
+  阈值：CPU ≥85 / 内存 ≥90 / 磁盘 ≥85 与前台节点卡的取值一致；
+  磁盘多保留一档 ≥90 的 crit（表格原来就有这个升级档，本轮不删）。
+
+  注意填充色与文字色是两套 token（`--warn` vs `--warn-text`）：
+  填充按图形算 3:1，文字按正文算 4.5:1，不能混用。
+
+  改前这三列各写各的：CPU 有 warn、内存**完全没有**阈值着色、磁盘的 crit 判据用
+  `> 90`（而 warn 用 `> 85`，两处写法还不一致）。现在三个指标共用这一份取值，
+  数值颜色与进度条颜色必然一致。
+*/
+type Tone = { bar: string; text: string }
+
+function cpuTone(value: number): Tone {
+  return value >= 85
+    ? { bar: "bg-warn", text: "text-warn-text" }
+    : { bar: "bg-brand", text: "" }
+}
+
+function memTone(value: number): Tone {
+  return value >= 90
+    ? { bar: "bg-warn", text: "text-warn-text" }
+    : { bar: "bg-brand", text: "" }
+}
+
+function diskTone(value: number): Tone {
+  if (value >= 90) return { bar: "bg-crit", text: "text-crit-text" }
+  if (value >= 85) return { bar: "bg-warn", text: "text-warn-text" }
+  return { bar: "bg-brand", text: "" }
+}
+
+/** 一个资源指标的单元格：数值在上、进度条在下，两个入口同一种表达 */
+function MetricCell({
+  value,
+  ratio,
+  tone,
+  offline,
+}: {
+  value: string
+  ratio: number
+  tone: Tone
+  offline?: boolean
+}) {
+  return (
+    <div className="min-w-0">
+      <div
+        className={cn(
+          "num truncate text-right text-xs",
+          offline ? "text-subtle" : tone.text,
+        )}
+      >
+        {value}
+      </div>
+      <ResourceBar
+        value={ratio}
+        tone={tone.bar}
+        inactive={offline}
+        className="mt-1.5"
+      />
+    </div>
+  )
+}
 
 export function OverviewPage() {
   useFleetTick()
@@ -105,7 +168,10 @@ export function OverviewPage() {
           数字与标签同为 text-xs font-medium（没有层级、扫不出数），
           5 个 text-border 的竖线分隔符对比度极低，纯粹是视觉噪声。
         */}
-        <dl className="flex flex-wrap items-start gap-x-6 gap-y-2">
+        <dl
+          data-testid="admin-stats"
+          className="flex flex-wrap items-start gap-x-6 gap-y-2"
+        >
           {[
             { label: "在线", value: `${online} / ${fleet.length}` },
             { label: "告警", value: String(firing), warn: firing > 0 },
@@ -189,124 +255,175 @@ export function OverviewPage() {
         />
       ) : (
           <div className="-mx-5 max-h-[calc(100svh-11rem)] overflow-auto px-5">
-            <Table className="min-w-[1080px]">
+            {/*
+              列宽改成显式指定 + table-fixed，并且**按实测文字宽度给足**。
+
+              改前是 auto 布局，宽度由内容撑开，量出来四处不对：
+                · CPU 被折线撑到 128px，而内存 59.5 / 磁盘 48px —— 减掉 24px 内边距
+                  只剩 35 / 24px，放不下任何进度条；
+                · 系统列实得 147.8px —— 内容驱动下的偶然结果，换个机器名就变；
+                · 速率列 102.2px 而内容要 102.2px，差 0.2px 就截成「1.24 / 0…」；
+                · 地址列内容要 157.4px 而实得 140px —— **溢出 17px 压到系统列上**，
+                  因为它没有 truncate，所以既不报错、截图里也看不出来（最阴的一种）。
+
+              各列内容的最坏宽度是**用页面真实字体在 DOM 里量出来的**，不是估的：
+                名称 80.8 / 标签 75.4 / IP+地区 133.4 / 系统 123.8 / 在线 49.7 / 速率 78.2
+
+              「地址」与「系统」并成一列（两行）是这一步的关键：
+              分列时这两列要占 147.8 + 157.4 = 305px，加上其余列总宽实测 1108px，
+              而 1280 视口下主区可用只有 1024px —— 必然横向滚动，且改前滚出去的
+              正好是最后那列「操作」，不滚到底点不到 ⋯。
+              并成一列后这一格只需 max(133.4, 123.8) + 24 ≈ 164px，
+              固定列合计降到 **824px**，1280 下节点列拿到 200px，
+              **既不横向滚动、也不截断任何一格**。
+              两者本来就是同一类信息（这台机器跑在哪、跑的是什么），
+              且行高已经是两行（节点列就是名称 + 标签），并列不额外增加高度。
+
+              （试过让操作列 sticky 吸附右侧来容忍滚动 —— 实测它会盖住
+                60s 心跳条最右 44px，比滚动条更糟，已放弃。）
+            */}
+            <Table data-testid="admin-table" className="min-w-[936px] table-fixed">
+              <colgroup>
+                <col className="w-10" />
+                {/* 不写宽度 = 吸收剩余，窄屏时最先被压的是它 */}
+                <col />
+                <col className="w-[164px]" />
+                <col className="w-[76px]" />
+                <col className="w-[92px]" />
+                <col className="w-[92px]" />
+                <col className="w-[92px]" />
+                <col className="w-[104px]" />
+                <col className="w-[120px]" />
+                <col className="w-11" />
+              </colgroup>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="h-8 w-8 px-3" />
-                <TableHead className="h-8 px-3 text-xs font-medium">节点</TableHead>
-                <TableHead className="h-8 px-3 text-xs font-medium">地址</TableHead>
-                <TableHead className="h-8 px-3 text-xs font-medium">系统</TableHead>
-                <TableHead className="h-8 px-3 text-right text-xs font-medium">
+                <TableHead className="h-9 px-3" />
+                <TableHead className="h-9 px-3 text-xs font-medium">节点</TableHead>
+                <TableHead className="h-9 px-3 text-xs font-medium">
+                  地址 / 系统
+                </TableHead>
+                <TableHead className="h-9 px-3 text-right text-xs font-medium">
                   在线
                 </TableHead>
-                <TableHead className="h-8 px-3 text-right text-xs font-medium">
+                <TableHead className="h-9 px-3 text-right text-xs font-medium">
                   CPU
                 </TableHead>
-                <TableHead className="h-8 px-3 text-right text-xs font-medium">
+                <TableHead className="h-9 px-3 text-right text-xs font-medium">
                   内存
                 </TableHead>
-                <TableHead className="h-8 px-3 text-right text-xs font-medium">
+                <TableHead className="h-9 px-3 text-right text-xs font-medium">
                   磁盘
                 </TableHead>
-                <TableHead className="h-8 px-3 text-right text-xs font-medium">
+                <TableHead className="h-9 px-3 text-right text-xs font-medium">
                   ↓ / ↑ MB/s
                 </TableHead>
-                <TableHead className="h-8 px-3 text-xs font-medium">
+                <TableHead className="h-9 px-2 text-xs font-medium">
                   60s
                 </TableHead>
-                <TableHead className="h-8 w-10 px-2" />
+                <TableHead className="h-9 px-2" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {servers.map((item) => (
                 <TableRow
                   key={item.id}
-                  className="group cursor-pointer"
+                  className="group/row cursor-pointer"
                   onClick={() => setParams({ server: item.id })}
                 >
-                  <TableCell className="h-9 px-3">
+                  <TableCell className="h-11 px-3">
                     <StatusDot status={item.status} />
                   </TableCell>
-                  <TableCell className="h-9 px-3">
-                    <div className="flex items-center gap-2">
+                  <TableCell className="h-11 px-3">
+                    {/*
+                      名字与标签分两行：原来并排时这一格要 176px，而进度条那几列更需要宽度。
+                      上下两行共约 33px，正好落进 44px 的行高 —— 不额外抬高行，也不截断标签。
+                    */}
+                    <div className="min-w-0">
                       {/* 真链接：键盘可达、可中键新开、可复制地址；行点击对鼠标仍然有效 */}
                       <Link
                         to={`?server=${item.id}`}
                         onClick={(event) => event.stopPropagation()}
-                        className="text-xs font-medium rounded-[3px] hover:underline underline-offset-2"
+                        title={item.name}
+                        className="block truncate rounded-[3px] text-xs font-medium hover:underline underline-offset-2"
                       >
                         {item.name}
                       </Link>
-                      <span className="text-2xs text-subtle">
+                      <div className="truncate text-2xs text-subtle">
                         {item.tags.join(" · ")}
-                      </span>
+                      </div>
                     </div>
                   </TableCell>
-                  <TableCell className="h-9 px-3">
-                    <span className="num text-xs text-muted-foreground">
-                      {item.ip}
-                    </span>
-                    <span className="ml-2 text-2xs text-subtle">{item.region}</span>
+                  <TableCell className="h-11 px-3">
+                    {/* 第一行网络地址（主）、第二行操作系统（次） */}
+                    <div className="truncate">
+                      <span className="num text-xs text-muted-foreground">
+                        {item.ip}
+                      </span>
+                      <span className="ml-2 text-2xs text-subtle">
+                        {item.region}
+                      </span>
+                    </div>
+                    <div
+                      className="truncate text-2xs text-subtle"
+                      title={item.os}
+                    >
+                      {item.os}
+                    </div>
                   </TableCell>
-                  <TableCell className="h-9 px-3 text-xs text-muted-foreground">
-                    {item.os}
-                  </TableCell>
-                  <TableCell className="num h-9 px-3 text-right text-xs text-muted-foreground">
+                  <TableCell className="num h-11 px-3 text-right text-xs text-muted-foreground">
                     {item.uptime}
                   </TableCell>
-                  <TableCell className="h-9 px-3">
-                    <div className="flex items-center justify-end gap-2">
-                      <span
-                        className={cn(
-                          "num w-10 text-right text-xs",
-                          item.cpu > 85 && "text-warn-text",
-                        )}
-                      >
-                        {item.offline ? "—" : pct(item.cpu)}
-                    </span>
-                    <Sparkline
-                      data={item.cpuSeries}
-                      color="var(--chart-1)"
-                      domain={[0, 100]}
-                      className="h-4 w-[56px]"
+                  <TableCell className="h-11 px-3">
+                    <MetricCell
+                      value={item.offline ? "—" : pct(item.cpu)}
+                      ratio={item.cpu}
+                      tone={cpuTone(item.cpu)}
+                      offline={item.offline}
                     />
-                  </div>
-                </TableCell>
-                <TableCell className="num h-9 px-3 text-right text-xs">
-                  {item.offline ? "—" : pct(item.mem)}
-                </TableCell>
-                <TableCell className="h-9 px-3 text-right">
-                  <span
-                    className={cn(
-                      "num text-xs",
-                      item.disk > 85 && "text-warn-text",
-                      item.disk > 90 && "text-crit-text",
-                    )}
-                  >
-                    {item.offline ? "—" : `${Math.round(item.disk)}%`}
-                  </span>
-                </TableCell>
-                <TableCell className="num h-9 px-3 text-right text-xs text-muted-foreground">
-                  {item.offline ? "—" : `${rate(item.rx)} / ${rate(item.tx)}`}
-                </TableCell>
-                <TableCell className="h-9 px-3">
-                  <Heartbeat data={item.heartbeat} />
-                </TableCell>
-                <TableCell className="h-9 px-2">
-                  <div
-                    className="opacity-0 transition-opacity dur-2 group-hover:opacity-100"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-6 text-muted-foreground"
-                        >
-                          <DotsThree className="size-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
+                  </TableCell>
+                  <TableCell className="h-11 px-3">
+                    <MetricCell
+                      value={item.offline ? "—" : pct(item.mem)}
+                      ratio={item.mem}
+                      tone={memTone(item.mem)}
+                      offline={item.offline}
+                    />
+                  </TableCell>
+                  <TableCell className="h-11 px-3">
+                    <MetricCell
+                      value={item.offline ? "—" : `${Math.round(item.disk)}%`}
+                      ratio={item.disk}
+                      tone={diskTone(item.disk)}
+                      offline={item.offline}
+                    />
+                  </TableCell>
+                  <TableCell className="num h-11 px-3 text-right text-xs text-muted-foreground">
+                    {item.offline ? "—" : `${rate(item.rx)} / ${rate(item.tx)}`}
+                  </TableCell>
+                  <TableCell className="h-11 px-2">
+                    <Heartbeat data={item.heartbeat} />
+                  </TableCell>
+                  {/*
+                    行操作在桌面靠 hover 显形，但触屏没有 hover —— 那些设备上
+                    这个按钮此前是永久 invisible（仍可点，但看不见）。
+                    touch: 下改成常显，顺带把命中区从 24px 撑到 44px。
+                  */}
+                  <TableCell className="h-11 px-2">
+                    <div
+                      className="opacity-0 transition-opacity dur-2 focus-within:opacity-100 group-hover/row:opacity-100 touch:opacity-100"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-6 text-muted-foreground touch:size-11"
+                          >
+                            <DotsThree className="size-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-36">
                         <DropdownMenuItem
                           onClick={() => setParams({ server: item.id })}

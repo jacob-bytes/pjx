@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import { Star } from "@phosphor-icons/react"
 import { tooltipShell } from "@/components/chart-tooltip"
 import { IconButton } from "@/components/icon-button"
+import { ResourceBar } from "@/components/resource-bar"
 import { StatusDot } from "@/components/status-dot"
 import { pct, rate } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -32,15 +33,8 @@ function Metric({
           {value}
         </span>
       </div>
-      <div className="mt-1 h-[3px] overflow-hidden rounded-full bg-muted">
-        <div
-          className={cn(
-            "h-full rounded-full transition-[width] dur-3 ease-out",
-            tone,
-          )}
-          style={{ width: Math.max(2, Math.min(100, ratio)) + "%" }}
-        />
-      </div>
+      {/* 与后台总览表格共用同一条进度条实现（见 components/resource-bar.tsx） */}
+      <ResourceBar value={ratio} tone={tone} inactive={ratio <= 0} className="mt-1" />
       <div className="num mt-1 truncate text-2xs text-subtle">{detail}</div>
     </div>
   )
