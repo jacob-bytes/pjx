@@ -161,12 +161,42 @@ agent 令牌在后台「接入与令牌」页创建，明文只显示一次。
 - GET/POST /api/admin/tokens、DELETE /api/admin/tokens/{id}（哈希入库、软撤销）
 - POST /api/admin/password（Argon2id）、GET/PUT /api/admin/settings（持久化）
 - 安全：登录限流、session secret 持久化、agent 令牌零明文、匿名接入自动关闭
+- 前端产物可选嵌入：go build -tags embedweb 产出单二进制；默认回退 -web-dir
+- 部署：Makefile、deploy/Dockerfile、systemd unit、install-agent.sh、Caddy/nginx 示例
+- 自监控：/api/admin/state 带 db/wal 大小、rollup/cleanup 时间、SSE 连接数、goroutine、uptime
 - GET /api/agent/ws（Bearer token，JSON-RPC hello / report / taskResult）
 - POST /api/admin/login / logout、GET /api/admin/session（HMAC 签名 cookie）
 - GET /api/admin/state / agents（需登录）
 - 静态服务：/ 与 /admin/ 双 SPA，含 /admin/* 深链兜底；找不到 web/dist 时显示占位页
 
-尚未实现：web/dist 的 go:embed、Raw 15s 落盘层、离线任务 queue + TTL、按 agent 的任务结果序列、Webhook 渠道实装、TOTP 二次验证。
+尚未实现：Raw 15s 落盘层、离线任务 queue + TTL、Webhook 渠道实装、TOTP 二次验证、告警事件确认/静音、Prometheus /metrics。
+
+## 生产部署
+
+单二进制（前端嵌入）：
+
+    make master
+    ./build/pjx-master -listen 0.0.0.0:8080 -data-dir /var/lib/pjx
+
+Docker：
+
+    docker build -f deploy/Dockerfile -t pjx .
+    docker run -d -p 8080:8080 -v pjx-data:/data pjx
+
+systemd（master）：
+
+    sudo install -m 0644 deploy/pjx-master.service /etc/systemd/system/
+    sudo mkdir -p /etc/pjx
+    echo 'PJX_ADMIN_PASSWORD=change-me' | sudo tee /etc/pjx/master.env
+    sudo systemctl enable --now pjx-master
+
+agent 一键安装：
+
+    curl -fsSL https://example.com/install-agent.sh | bash -s -- \
+      --master wss://probe.example.com/api/agent/ws --token pjx_xxx --name node-1 --tags prod
+
+反向代理：Caddy 用 deploy/Caddyfile.example，nginx 用 deploy/nginx.conf.example。
+关键是 SSE 关闭响应缓冲、WebSocket 保留 Upgrade 头。
 
 ## 下一步
 

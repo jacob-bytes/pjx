@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -76,6 +78,16 @@ func (s *Server) handleAdminState(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	dbInfo := map[string]any{}
+	if info, err := os.Stat(s.cfg.DBPath()); err == nil {
+		dbInfo["size_bytes"] = info.Size()
+	}
+	if info, err := os.Stat(s.cfg.DBPath() + "-wal"); err == nil {
+		dbInfo["wal_size_bytes"] = info.Size()
+	}
+	lastRollup, _ := s.store.GetSetting(r.Context(), "last_rollup")
+	lastCleanup, _ := s.store.GetSetting(r.Context(), "last_cleanup")
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"server_time": time.Now().Unix(),
 		"online":      s.hub.Count(),
@@ -84,6 +96,17 @@ func (s *Server) handleAdminState(w http.ResponseWriter, r *http.Request) {
 		"retention":   s.cfg.Retention,
 		"telegram": map[string]any{
 			"enabled": s.cfg.Telegram.Enabled,
+		},
+		"db": dbInfo,
+		"maintenance": map[string]any{
+			"last_rollup":  lastRollup,
+			"last_cleanup": lastCleanup,
+		},
+		"runtime": map[string]any{
+			"uptime_seconds": int64(time.Since(s.startedAt).Seconds()),
+			"goroutines":     runtime.NumGoroutine(),
+			"sse_clients":    s.sseClients.Load(),
+			"ws_sessions":    s.hub.Count(),
 		},
 	})
 }

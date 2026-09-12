@@ -31,6 +31,9 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 	flusher.Flush()
 
+	s.sseClients.Add(1)
+	defer s.sseClients.Add(-1)
+
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	heartbeat := time.NewTicker(15 * time.Second)

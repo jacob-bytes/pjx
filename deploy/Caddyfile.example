@@ -1,0 +1,8 @@
+# Caddy 会自动处理 WebSocket 升级；
+# SSE 需要 flush_interval -1 关闭响应缓冲。
+probe.example.com {
+encode zstd gzip
+reverse_proxy 127.0.0.1:8080 {
+flush_interval -1
+}
+}

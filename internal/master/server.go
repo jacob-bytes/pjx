@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jacob-bytes/pjx/internal/alerts"
@@ -15,6 +16,7 @@ import (
 	"github.com/jacob-bytes/pjx/internal/metrics"
 	"github.com/jacob-bytes/pjx/internal/scheduler"
 	"github.com/jacob-bytes/pjx/internal/store"
+	"github.com/jacob-bytes/pjx/web"
 )
 
 // Server 组装 HTTP 路由、agent hub 与后台鉴权。
@@ -31,6 +33,9 @@ type Server struct {
 	mu        sync.Mutex
 	seq       uint64
 	configRev int64
+
+	startedAt  time.Time
+	sseClients atomic.Int64
 }
 
 // New 构造 master。
@@ -42,6 +47,7 @@ func New(cfg *config.Config, db *store.Store, log *slog.Logger) *Server {
 		hub:       NewHub(),
 		log:       log,
 		configRev: 1,
+		startedAt: time.Now(),
 	}
 
 	// 先应用持久化设置，再按最终配置构建子系统。
@@ -100,7 +106,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("/api/agent/ws", s.handleAgentWS)
 
-	mux.Handle("/", newStaticHandler(s.cfg.WebDir, s.log))
+	mux.Handle("/", newStaticHandler(s.cfg.WebDir, web.FS(), s.log))
 
 	return recoverMiddleware(s.log, logMiddleware(s.log, mux))
 }
