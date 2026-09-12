@@ -5,10 +5,8 @@ import { DotsThree, MagnifyingGlass } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { EmptyState } from "@/components/empty-state"
 import { Segmented } from "@/components/segmented"
-import { Heartbeat } from "@/components/heartbeat"
 import { NodeTagsDialog } from "@/components/node-tags-dialog"
 import { nodeTags, useSettings } from "@/components/settings-provider"
-import { ResourceBar } from "@/components/resource-bar"
 import { ServerSheet } from "@/components/server-sheet"
 import { StatusDot } from "@/components/status-dot"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
@@ -31,75 +29,64 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { TableSkeleton } from "@/components/ui/skeleton"
-import { alertEvents, fleet, useFleetStatus, useFleetTick, type Server } from "@/lib/mock"
-import { pct, rate } from "@/lib/format"
+import {
+  alertEvents,
+  alertRules,
+  fleet,
+  probes,
+  useFleetStatus,
+  useFleetTick,
+  type Server,
+} from "@/lib/mock"
+import { METRIC_LIMITS } from "@/lib/settings"
 import { pickParam } from "@/lib/url"
 import { cn } from "@/lib/utils"
 
 const TAGS = ["全部", "生产", "备用", "香港", "东京", "新加坡"] as const
 
 /*
-  阈值：CPU ≥85 / 内存 ≥90 / 磁盘 ≥85 与前台节点卡的取值一致；
-  磁盘多保留一档 ≥90 的 crit（表格原来就有这个升级档，本轮不删）。
+  「关注」列：**只在接近或越过阈值时**才显示那一项。
 
-  注意填充色与文字色是两套 token（`--warn` vs `--warn-text`）：
-  填充按图形算 3:1，文字按正文算 4.5:1，不能混用。
-
-  改前这三列各写各的：CPU 有 warn、内存**完全没有**阈值着色、磁盘的 crit 判据用
-  `> 90`（而 warn 用 `> 85`，两处写法还不一致）。现在三个指标共用这一份取值，
-  数值颜色与进度条颜色必然一致。
+  §AF 定过一条规则：常态不写状态文字、只报异常 —— 因为在线是常态，
+  写出来反而稀释了真正该看的那一条。这里同理：
+  把「CPU 23%」这种数字列出来，等于把前台已经展示过的数据再刷一遍；
+  而「磁盘 92%（阈值 85%）」回答的才是后台该回答的问题 ——
+  **这台机器现在需要我做什么**。
 */
-type Tone = { bar: string; text: string }
+type Concern = { label: string; value: number; limit: number; over: boolean }
 
-function cpuTone(value: number): Tone {
-  return value >= 85
-    ? { bar: "bg-warn", text: "text-warn-text" }
-    : { bar: "bg-brand", text: "" }
+function tightestMetric(server: Server): Concern | null {
+  let best: Concern | null = null
+  for (const metric of METRIC_LIMITS) {
+    const value = server[metric.key]
+    if (!best || value / metric.limit > best.value / best.limit) {
+      best = {
+        label: metric.label,
+        value,
+        limit: metric.limit,
+        over: value >= metric.limit,
+      }
+    }
+  }
+  // 全部在阈值的 90% 以下 = 没有需要关注的东西
+  return best && best.value / best.limit >= 0.9 ? best : null
 }
 
-function memTone(value: number): Tone {
-  return value >= 90
-    ? { bar: "bg-warn", text: "text-warn-text" }
-    : { bar: "bg-brand", text: "" }
+function compareVersion(a: string, b: string) {
+  const x = a.split(".").map(Number)
+  const y = b.split(".").map(Number)
+  for (let i = 0; i < 3; i++) {
+    const diff = (x[i] ?? 0) - (y[i] ?? 0)
+    if (diff !== 0) return diff
+  }
+  return 0
 }
 
-function diskTone(value: number): Tone {
-  if (value >= 90) return { bar: "bg-crit", text: "text-crit-text" }
-  if (value >= 85) return { bar: "bg-warn", text: "text-warn-text" }
-  return { bar: "bg-brand", text: "" }
-}
-
-/** 一个资源指标的单元格：数值在上、进度条在下，两个入口同一种表达 */
-function MetricCell({
-  value,
-  ratio,
-  tone,
-  offline,
-}: {
-  value: string
-  ratio: number
-  tone: Tone
-  offline?: boolean
-}) {
-  return (
-    <div className="min-w-0">
-      <div
-        className={cn(
-          "num truncate text-right text-xs",
-          offline ? "text-subtle" : tone.text,
-        )}
-      >
-        {value}
-      </div>
-      <ResourceBar
-        value={ratio}
-        tone={tone.bar}
-        inactive={offline}
-        className="mt-1.5"
-      />
-    </div>
-  )
-}
+/** 最新 agent 版本。「落后」要有参照物，所以从机队里取最大值。 */
+const LATEST_AGENT = fleet.reduce(
+  (latest, item) => (compareVersion(item.agent, latest) > 0 ? item.agent : latest),
+  "0.0.0",
+)
 
 export function OverviewPage() {
   useFleetTick()
@@ -159,30 +146,62 @@ export function OverviewPage() {
 
   const online = fleet.filter((item) => item.status !== "off").length
   const firing = alertEvents.filter((event) => event.state === "firing").length
-  const avgCpu = fleet.reduce((sum, item) => sum + item.cpu, 0) / fleet.length
-  const totalRx = fleet.reduce((sum, item) => sum + item.rx, 0)
-  const totalTx = fleet.reduce((sum, item) => sum + item.tx, 0)
+  const staleAgents = fleet.filter(
+    (item) => compareVersion(item.agent, LATEST_AGENT) < 0,
+  ).length
+  const aliveProbes = probes.filter(
+    (probe) => !settings.probesRemoved.includes(probe.id),
+  )
+  const enabledProbes = aliveProbes.filter(
+    (probe) => settings.probeEnabled[probe.id] ?? true,
+  ).length
+  const enabledRules = alertRules.filter(
+    (rule) => settings.ruleEnabled[rule.id] ?? rule.enabled,
+  ).length
 
   return (
     <>
         {/*
-          统计条：标签在上、数值在下，数值用 text-sm font-semibold + num，
-          标签用 text-2xs text-subtle —— 形成两级层级，一眼能扫出数字。
+          统计条：标签在上、数值在下（§AP 定的两级层级），但**内容换了一套**。
 
-          改前是「在线 <b>11</b> / 12 | 告警 <b>3</b> | …」一串行内文本：
-          数字与标签同为 text-xs font-medium（没有层级、扫不出数），
-          5 个 text-border 的竖线分隔符对比度极低，纯粹是视觉噪声。
+          改前是「在线 · 告警 · 平均 CPU · 入站 · 出站」—— 后三项就是前台 KPI 的
+          同一批展示数据。后台该回答的是"有没有需要我处理的事、配置齐不齐"，
+          所以换成：在线 / 触发中告警 / agent 落后 / 探测启用 / 规则启用。
+
+          顺带修一个口径问题：原来的「告警 3」数的是**触发中的告警事件条数**，
+          而前台状态通栏的「1 告警」数的是**告警节点数** —— 同一个词两个口径。
+          现在标签写明「触发中告警」。
         */}
         <dl
           data-testid="admin-stats"
-          className="flex flex-wrap items-start gap-x-6 gap-y-2"
+          /*
+            窄屏用 grid、宽屏回到 flex：
+            5 项在 390px 下 flex-wrap 会排成 4+1，末项独占一行、右侧空出 85%（实测），
+            grid 的行是规整的所以不显突兀；而宽屏下 flex 让它们紧凑地靠左排，
+            保持 §AP 定的形态（grid 会把 5 项摊满整行，5 列里每列大半是空的）。
+          */
+          className="grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-3 lg:flex lg:flex-wrap lg:items-start lg:gap-y-2"
         >
           {[
             { label: "在线", value: `${online} / ${fleet.length}` },
-            { label: "告警", value: String(firing), warn: firing > 0 },
-            { label: "平均 CPU", value: pct(avgCpu) },
-            { label: "入站", value: `${rate(totalRx)} MB/s` },
-            { label: "出站", value: `${rate(totalTx)} MB/s` },
+            {
+              label: "触发中告警",
+              value: String(firing),
+              warn: firing > 0,
+            },
+            {
+              label: "agent 落后",
+              value: `${staleAgents} 台`,
+              warn: staleAgents > 0,
+            },
+            {
+              label: "探测任务",
+              value: `${enabledProbes} / ${aliveProbes.length} 启用`,
+            },
+            {
+              label: "告警规则",
+              value: `${enabledRules} / ${alertRules.length} 启用`,
+            },
           ].map((item) => (
             <div key={item.label} className="flex flex-col gap-0.5">
               <dt className="text-2xs text-subtle">{item.label}</dt>
@@ -207,7 +226,7 @@ export function OverviewPage() {
             onChange={(event) => setQuery(event.target.value)}
             placeholder="搜索名称、IP、标签"
             aria-label="搜索名称、IP、标签"
-            className="h-8 w-[220px] pl-8 text-xs"
+            className="h-8 w-full pl-8 text-xs sm:w-[220px]"
           />
         </div>
 
@@ -287,18 +306,15 @@ export function OverviewPage() {
               （试过让操作列 sticky 吸附右侧来容忍滚动 —— 实测它会盖住
                 60s 心跳条最右 44px，比滚动条更糟，已放弃。）
             */}
-            <Table data-testid="admin-table" className="min-w-[936px] table-fixed">
+            <Table data-testid="admin-table" className="min-w-[704px] table-fixed">
               <colgroup>
                 <col className="w-10" />
-                {/* 不写宽度 = 吸收剩余，窄屏时最先被压的是它 */}
+                {/* 不写宽度 = 吸收剩余 */}
                 <col />
                 <col className="w-[164px]" />
-                <col className="w-[76px]" />
-                <col className="w-[92px]" />
-                <col className="w-[92px]" />
+                <col className="w-[84px]" />
                 <col className="w-[92px]" />
                 <col className="w-[104px]" />
-                <col className="w-[120px]" />
                 <col className="w-11" />
               </colgroup>
             <TableHeader>
@@ -308,23 +324,16 @@ export function OverviewPage() {
                 <TableHead className="h-9 px-3 text-xs font-medium">
                   地址 / 系统
                 </TableHead>
+                <TableHead className="h-9 px-3 text-xs font-medium">agent</TableHead>
                 <TableHead className="h-9 px-3 text-right text-xs font-medium">
-                  在线
+                  最后上报
                 </TableHead>
-                <TableHead className="h-9 px-3 text-right text-xs font-medium">
-                  CPU
-                </TableHead>
-                <TableHead className="h-9 px-3 text-right text-xs font-medium">
-                  内存
-                </TableHead>
-                <TableHead className="h-9 px-3 text-right text-xs font-medium">
-                  磁盘
-                </TableHead>
-                <TableHead className="h-9 px-3 text-right text-xs font-medium">
-                  ↓ / ↑ MB/s
-                </TableHead>
-                <TableHead className="h-9 px-2 text-xs font-medium">
-                  60s
+                {/* 表头带上口径，否则「关注」是个猜谜的词 */}
+                <TableHead
+                  className="h-9 px-3 text-xs font-medium"
+                  title="占阈值 90% 以上的那一项；都在 90% 以下时留空"
+                >
+                  关注
                 </TableHead>
                 <TableHead className="h-9 px-2" />
               </TableRow>
@@ -341,23 +350,24 @@ export function OverviewPage() {
                   </TableCell>
                   <TableCell className="h-11 px-3">
                     {/*
-                      名字与标签分两行：原来并排时这一格要 176px，而进度条那几列更需要宽度。
-                      上下两行共约 33px，正好落进 44px 的行高 —— 不额外抬高行，也不截断标签。
+                      §AQ 把名字与标签堆成两行，是因为那一格只有 132px；
+                      监控列搬走之后它有 496px，并排更紧凑、也少一层竖直噪声。
+                      行高由「地址 / 系统」那一格（两行）决定，不受这里影响。
                     */}
-                    <div className="min-w-0">
+                    <div className="flex items-center gap-2">
                       {/* 真链接：键盘可达、可中键新开、可复制地址；行点击对鼠标仍然有效 */}
                       <Link
                         to={`?server=${item.id}`}
                         onClick={(event) => event.stopPropagation()}
                         title={item.name}
-                        className="block truncate rounded-[3px] text-xs font-medium hover:underline underline-offset-2"
+                        className="truncate rounded-[3px] text-xs font-medium hover:underline underline-offset-2"
                       >
                         {item.name}
                       </Link>
-                      <div className="truncate text-2xs text-subtle">
+                      <span className="truncate text-2xs text-subtle">
                         {/* 标签是配置，可能被「编辑标签」改过，不能直接读 mock */}
                         {nodeTags(settings, item.id, item.tags).join(" · ")}
-                      </div>
+                      </span>
                     </div>
                   </TableCell>
                   <TableCell className="h-11 px-3">
@@ -377,38 +387,52 @@ export function OverviewPage() {
                       {item.os}
                     </div>
                   </TableCell>
-                  <TableCell className="num h-11 px-3 text-right text-xs text-muted-foreground">
-                    {item.uptime}
+                  <TableCell className="num h-11 px-3 text-xs">
+                    <span
+                      className={cn(
+                        item.agent !== LATEST_AGENT
+                          ? "text-warn-text"
+                          : "text-muted-foreground",
+                      )}
+                      title={
+                        item.agent !== LATEST_AGENT
+                          ? `落后于最新 v${LATEST_AGENT}`
+                          : `最新 v${LATEST_AGENT}`
+                      }
+                    >
+                      v{item.agent}
+                    </span>
+                  </TableCell>
+                  <TableCell
+                    className={cn(
+                      "num h-11 px-3 text-right text-xs",
+                      item.offline ? "text-crit-text" : "text-muted-foreground",
+                    )}
+                  >
+                    {item.lastSeen}
                   </TableCell>
                   <TableCell className="h-11 px-3">
-                    <MetricCell
-                      value={item.offline ? "—" : pct(item.cpu)}
-                      ratio={item.cpu}
-                      tone={cpuTone(item.cpu)}
-                      offline={item.offline}
-                    />
-                  </TableCell>
-                  <TableCell className="h-11 px-3">
-                    <MetricCell
-                      value={item.offline ? "—" : pct(item.mem)}
-                      ratio={item.mem}
-                      tone={memTone(item.mem)}
-                      offline={item.offline}
-                    />
-                  </TableCell>
-                  <TableCell className="h-11 px-3">
-                    <MetricCell
-                      value={item.offline ? "—" : `${Math.round(item.disk)}%`}
-                      ratio={item.disk}
-                      tone={diskTone(item.disk)}
-                      offline={item.offline}
-                    />
-                  </TableCell>
-                  <TableCell className="num h-11 px-3 text-right text-xs text-muted-foreground">
-                    {item.offline ? "—" : `${rate(item.rx)} / ${rate(item.tx)}`}
-                  </TableCell>
-                  <TableCell className="h-11 px-2">
-                    <Heartbeat data={item.heartbeat} />
+                    {/*
+                      只报异常：都在阈值 90% 以下就留空。原来这里是
+                      「数值 + 进度条」的 CPU/内存/磁盘 三列 —— 那是前台卡片的同一批数据。
+                    */}
+                    {(() => {
+                      const concern = item.offline ? null : tightestMetric(item)
+                      if (!concern) {
+                        return <span className="text-xs text-subtle">—</span>
+                      }
+                      return (
+                        <span
+                          className={cn(
+                            "num text-xs",
+                            concern.over ? "text-crit-text" : "text-warn-text",
+                          )}
+                          title={`阈值 ${concern.limit}%`}
+                        >
+                          {concern.label} {Math.round(concern.value)}%
+                        </span>
+                      )
+                    })()}
                   </TableCell>
                   {/*
                     行操作在桌面靠 hover 显形，但触屏没有 hover —— 那些设备上

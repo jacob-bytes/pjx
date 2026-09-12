@@ -13,6 +13,34 @@ import { StatusDot } from "@/components/status-dot"
 import { fleet } from "@/lib/mock"
 import { useTheme } from "@/lib/theme"
 
+/** 设置子页。keywords 供搜索命中（面板按 value 做模糊匹配）。 */
+const SETTINGS_PAGES = [
+  {
+    path: "/settings/access",
+    label: "接入与令牌",
+    hint: "接入",
+    keywords: "token 令牌 安装 agent 接入",
+  },
+  {
+    path: "/settings/notifications",
+    label: "通知",
+    hint: "通知",
+    keywords: "telegram webhook 通知 渠道",
+  },
+  {
+    path: "/settings/retention",
+    label: "数据与保留",
+    hint: "数据",
+    keywords: "保留 数据 清理 压缩 存储",
+  },
+  {
+    path: "/settings/general",
+    label: "通用",
+    hint: "通用",
+    keywords: "站点 时区 主题 外观 语言",
+  },
+] as const
+
 export function CommandPalette({
   open,
   onOpenChange,
@@ -46,10 +74,23 @@ export function CommandPalette({
             <Bell className="size-4 text-muted-foreground" />
             告警
           </CommandItem>
-          <CommandItem onSelect={() => run(() => navigate("/settings"))}>
-            <Gear className="size-4 text-muted-foreground" />
-            设置
-          </CommandItem>
+        </CommandGroup>
+        {/*
+          「设置」原来只跳到 /settings（会重定向到数据与保留），
+          四个子页在命令面板里一个都搜不到 —— 而它们才是后台真正要配的东西。
+        */}
+        <CommandGroup heading="设置">
+          {SETTINGS_PAGES.map((page) => (
+            <CommandItem
+              key={page.path}
+              value={`设置 ${page.label} ${page.keywords}`}
+              onSelect={() => run(() => navigate(page.path))}
+            >
+              <Gear className="size-4 text-muted-foreground" />
+              {page.label}
+              <span className="ml-auto text-2xs text-subtle">{page.hint}</span>
+            </CommandItem>
+          ))}
         </CommandGroup>
         <CommandSeparator />
         <CommandGroup heading="节点">

@@ -567,7 +567,7 @@ export function ProbesPage() {
             onChange={(event) => setQuery(event.target.value)}
             placeholder="搜索任务或目标"
             aria-label="搜索任务或目标"
-            className="h-8 w-[220px] pl-8 text-xs"
+            className="h-8 w-full pl-8 text-xs sm:w-[220px]"
           />
         </div>
         <Button
