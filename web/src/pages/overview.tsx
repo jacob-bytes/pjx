@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState } from "react"
-import { ToggleChip } from "@/components/toggle-chip"
+import { ToggleChip, chipGroupClass } from "@/components/toggle-chip"
 import { Link, useSearchParams } from "react-router"
 import { DotsThree, MagnifyingGlass } from "@phosphor-icons/react"
 import { toast } from "sonner"
@@ -216,8 +216,18 @@ export function OverviewPage() {
           ))}
         </dl>
 
-      <div className="mb-3 mt-3 flex flex-wrap items-center gap-2">
-        <div className="relative">
+      {/*
+        筛选区。三类控件底座原来各不相同、权重分不开：
+          · 搜索框   —— 透明底 + 边框（在灰页面上最"轻"）
+          · 状态分段 —— 实心灰容器 + 几乎看不出的选中（见 Segmented 的注释）
+          · 标签胶囊 —— **每个胶囊各带一圈边框**，高度还比容器矮 4px（h-7 vs 32px 容器内）
+        现在：搜索是唯一的"输入"，用白底与两组筛选分开；两组筛选是**同一类控件**，
+        共用 chipGroupClass + raised 选中态，高度统一 32px。§O 的教训是
+        "不同功能的控件不能长得一样"，而这里两组本来就是同一功能（筛选），
+        所以给它们各加一个 11px 的组名，解决"两个「全部」指哪个"的歧义。
+      */}
+      <div className="mb-3 mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="relative w-full sm:w-[220px]">
           <MagnifyingGlass
             className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-subtle"
           />
@@ -226,35 +236,50 @@ export function OverviewPage() {
             onChange={(event) => setQuery(event.target.value)}
             placeholder="搜索名称、IP、标签"
             aria-label="搜索名称、IP、标签"
-            className="h-8 w-full pl-8 text-xs sm:w-[220px]"
+            className="h-8 bg-card pl-8 text-xs"
           />
         </div>
 
-        <Segmented
-          ariaLabel="按状态筛选"
-          value={filter}
-          onChange={setFilter}
-          options={[
-            { value: "all", label: "全部" },
-            { value: "ok", label: "在线" },
-            { value: "bad", label: "异常" },
-          ]}
-        />
-
-        <div className="flex items-center gap-1" role="group" aria-label="按标签筛选">
-          {TAGS.map((item) => (
-            <ToggleChip
-              key={item}
-              active={tag === item}
-              onClick={() => setTag(item)}
-              className={cn("h-7 border text-2xs", tag === item && "border-transparent")}
-            >
-              {item}
-            </ToggleChip>
-          ))}
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          {/*
+            组名只为消歧义（两组选项都以「全部」开头）。
+            只在 xl 才显示是量出来的：1024 下内容区 768px，带组名需要 790px ——
+            末项「12 台」会被挤到第二行独占一行、右侧空 96%（实测）。
+            不带组名是 722px，正好一行。窄屏同理，每行本来就只放得下一组。
+          */}
+          <span className="hidden text-2xs text-subtle xl:inline">状态</span>
+          <Segmented
+            ariaLabel="按状态筛选"
+            value={filter}
+            onChange={setFilter}
+            /* 窄屏撑满一行：否则它单独占一行只用到 38%，是最难看的"孤行" */
+            className="w-full sm:w-fit"
+            options={[
+              { value: "all", label: "全部" },
+              { value: "ok", label: "在线" },
+              { value: "bad", label: "异常" },
+            ]}
+          />
         </div>
 
-        <span className="ml-auto num text-2xs text-subtle">
+        <div className="flex items-center gap-2">
+          <span className="hidden text-2xs text-subtle xl:inline">标签</span>
+          <div className={chipGroupClass} role="group" aria-label="按标签筛选">
+            {TAGS.map((item) => (
+              <ToggleChip
+                key={item}
+                variant="raised"
+                active={tag === item}
+                onClick={() => setTag(item)}
+                className="h-7"
+              >
+                {item}
+              </ToggleChip>
+            ))}
+          </div>
+        </div>
+
+        <span className="num ml-auto text-2xs text-subtle">
           {servers.length} 台
         </span>
       </div>

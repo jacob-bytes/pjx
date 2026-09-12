@@ -19,8 +19,11 @@ export function SettingsLayout() {
             to={item.to}
             className={({ isActive }) =>
               cn(
-                "flex h-8 items-center rounded-md px-2.5 text-xs text-muted-foreground transition-colors dur-2 hover:bg-muted hover:text-foreground",
-                isActive && "bg-accent font-medium text-foreground",
+                // 与侧栏同一套选中态（底色 + 半粗 + 左侧指示条）、同一高度 h-9
+                "relative flex h-9 items-center rounded-md px-2.5 text-xs text-muted-foreground transition-colors dur-2 hover:bg-muted hover:text-foreground",
+                "before:absolute before:left-0 before:top-1/2 before:h-4 before:w-[2px] before:-translate-y-1/2 before:rounded-full before:bg-transparent",
+                isActive &&
+                  "bg-accent font-semibold text-foreground before:bg-brand",
               )
             }
           >

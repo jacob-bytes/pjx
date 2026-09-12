@@ -52,8 +52,17 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
             onClick={onNavigate}
             className={({ isActive }) =>
               cn(
-                "flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-muted-foreground transition-colors dur-2 hover:bg-muted hover:text-foreground",
-                isActive && "bg-accent font-medium text-foreground",
+                /*
+                  选中态原来只有 `bg-accent`，而 hover 是 `bg-muted` ——
+                  两者只差 0.017 明度（约 1.05:1），**悬停和选中几乎同色**，
+                  实际只靠 font-medium 撑着。现在选中态拿到三个通道：
+                  底色（比 hover 重）+ 半粗 + 左侧 2px 品牌色指示条（位置通道）；
+                  hover 保持轻一档，所以"悬停→选中"有明确的方向感。
+                */
+                "relative flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-muted-foreground transition-colors dur-2 hover:bg-muted hover:text-foreground",
+                "before:absolute before:left-0 before:top-1/2 before:h-4 before:w-[2px] before:-translate-y-1/2 before:rounded-full before:bg-transparent",
+                isActive &&
+                  "bg-accent font-semibold text-foreground before:bg-brand",
               )
             }
           >
@@ -152,10 +161,16 @@ export function AppShell() {
           <div className="ml-auto flex items-center gap-1.5">
             <LiveStatus />
 
+            {/*
+              原来是 variant="outline"：一圈实心边框 + 93px 宽，是顶栏里最重的元素 ——
+              比侧栏的选中项还重，而它只是一个快捷入口。
+              降到 ghost（无框，hover 才出底），与前台的图标按钮一致；
+              ⌘K 那个 kbd 自带边框和底色，足够提示"这里可以按"。
+            */}
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              className="h-8 gap-1.5 px-2 text-2xs font-normal text-muted-foreground"
+              className="h-8 gap-1.5 px-2 text-2xs font-normal text-subtle"
               onClick={() => setPaletteOpen(true)}
             >
               <MagnifyingGlass className="size-3.5" />

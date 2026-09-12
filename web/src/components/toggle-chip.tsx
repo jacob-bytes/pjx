@@ -3,6 +3,16 @@ import { cn } from "@/lib/utils"
 import { Check } from "@phosphor-icons/react"
 
 /**
+ * 胶囊 / 分段组的容器样式。
+ *
+ * 单独导出是因为它必须与 `Segmented` 的容器**完全一致** ——
+ * 后台筛选区有两组同类控件（按状态、按标签），各写一份的话，
+ * 迟早又变成"同一个产品里两套分段控件"（§AE 就是这么来的）。
+ */
+export const chipGroupClass =
+  "flex flex-wrap items-center gap-0.5 rounded-lg bg-muted p-0.5"
+
+/**
  * 切换胶囊。
  *
  * 全站有 5 处「可切换的标签」——分类、标签筛选、ping 线路、节点标签：
@@ -24,7 +34,7 @@ export function ToggleChip({
   children: ReactNode
   /**
    * filled —— 独立标签的选中态（实心底）
-   * raised —— 放在分段容器里的选中态（浮起白块）。
+   * raised —— 放在分段容器里的选中态（浮起块，用 --surface-raised）。
    *   两者不能合并：分段容器本身是灰底，容器内的选中项再用实心底就没有层次了。
    */
   variant?: "filled" | "raised"
@@ -43,10 +53,10 @@ export function ToggleChip({
         "focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none",
         active
           ? variant === "raised"
-            ? "bg-card font-semibold text-foreground shadow-card"
+            ? "bg-surface-raised font-semibold text-foreground shadow-card"
             : "bg-accent font-medium text-foreground"
           : variant === "raised"
-            ? "text-muted-foreground hover:bg-card/60 hover:text-foreground"
+            ? "text-muted-foreground hover:bg-surface-raised/60 hover:text-foreground"
             : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
         className,
       )}

@@ -82,6 +82,16 @@
   --fg-subtle: oklch(0.536 0.012 255);
   --border-strong: oklch(0.83 0.008 255);
 
+  /*
+    浮起表面：分段控件、标签胶囊的**选中块**用的底色。
+
+    为什么不能直接用 --card：亮色下 card(1.0) 比容器 muted(0.955) **亮** → 是"浮起" ✓；
+    但暗色下 card(0.19) 比 muted(0.23) **暗** → 读起来是"下沉"，方向正好相反。
+    而 --accent 又只在暗色下比容器亮。所以"比容器更靠近前景"这件事
+    需要独立 token —— 它的定义就是"容器之上的那一层"，与主题无关。
+  */
+  --surface-raised: oklch(1 0 0);
+
   /* 形状与动效 */
   --radius: 10px;
   --dur-1: 120ms;
@@ -145,6 +155,10 @@
 
   --fg-subtle: oklch(0.62 0.012 265);
   --border-strong: oklch(0.36 0.016 265);
+
+  /* 暗色下"浮起"= 比容器 muted(0.23) 更亮。取一个比 --accent(0.265) 再亮一档的值，
+     这样即使不看阴影也能读出块的位置；阴影在深色底上几乎不可见，不能只靠它。 */
+  --surface-raised: oklch(0.30 0.016 265);
 }
 
 @theme inline {
@@ -178,6 +192,7 @@
   --color-info-text: var(--info-text);
   --color-subtle: var(--fg-subtle);
   --color-brand: var(--brand);
+  --color-surface-raised: var(--surface-raised);
   --color-border-strong: var(--border-strong);
 
   --color-chart-1: var(--chart-1);

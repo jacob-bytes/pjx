@@ -558,7 +558,7 @@ export function ProbesPage() {
   return (
     <>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="relative">
+        <div className="relative w-full sm:w-[220px]">
           <MagnifyingGlass
             className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-subtle"
           />
@@ -567,7 +567,7 @@ export function ProbesPage() {
             onChange={(event) => setQuery(event.target.value)}
             placeholder="搜索任务或目标"
             aria-label="搜索任务或目标"
-            className="h-8 w-full pl-8 text-xs sm:w-[220px]"
+            className="h-8 bg-card pl-8 text-xs"
           />
         </div>
         <Button

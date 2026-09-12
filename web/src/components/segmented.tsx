@@ -6,11 +6,23 @@ export interface SegmentedOption<T extends string | number | boolean> {
 }
 
 /**
- * 分段控件。全站 5 处（总览筛选 / 告警级别 / 探测类型 / 探测覆盖 / 通用主题）
- * 原本是同一段内联 markup 复制，连 role/aria 都是手抄的。
+ * 分段控件。全站 9 处（总览筛选 / 告警级别 / 探测类型 / 探测覆盖 / 主题 /
+ * 时间范围 / 弹窗页签…）共用这一份。
  *
  * 语义用 radiogroup + radio，保证读屏能播报"选中了哪个"——
  * 之前只有颜色变化，读屏听到的是一排一模一样的按钮。
+ *
+ * ## 选中态为什么是"白浮块"
+ *
+ * §AE 就定过这个方向（"灰容器 + 选中项白色浮块 + 微阴影"），但**代码里一直没落地** ——
+ * 实际是 `bg-accent`：`--muted` 0.955 与 `--accent` 0.938 只差 **0.017 明度**
+ * （约 1.05:1），肉眼几乎同色，选中与否实际上只靠 font-medium 撑着。
+ * 这不只是"不显眼"，是 WCAG 1.4.1 的问题：**不能只用颜色传达信息**。
+ *
+ * 现在选中态有四个通道：**容器内浮起 + 阴影 + 半粗 + 位置**，不依赖颜色。
+ *
+ * 底色用 `--surface-raised` 而不是 `--card`：card 在暗色下比容器**更暗**，
+ * 会读成"下沉"（见 globals.css 里该 token 的注释）。
  */
 export function Segmented<T extends string | number | boolean>({
   value,
@@ -35,7 +47,8 @@ export function Segmented<T extends string | number | boolean>({
       role="radiogroup"
       aria-label={ariaLabel}
       className={cn(
-        "flex items-center gap-0.5 rounded-md bg-muted p-0.5",
+        // rounded-lg 与前台分类容器一致（原来这里也是 rounded-md，两种圆角并存）
+        "flex items-center gap-0.5 rounded-lg bg-muted p-0.5",
         fill ? "w-full" : "w-fit",
         className,
       )}
@@ -50,10 +63,12 @@ export function Segmented<T extends string | number | boolean>({
             aria-checked={active}
             onClick={() => onChange(option.value)}
             className={cn(
-              "h-7 rounded-[4px] px-2.5 text-2xs text-muted-foreground transition-colors dur-2 hover:text-foreground",
+              "h-7 min-w-0 rounded-md px-2.5 text-2xs text-muted-foreground transition-colors dur-2 hover:text-foreground",
               fill && "flex-1",
               mono && "num",
-              active && "bg-accent font-medium text-foreground hover:text-foreground",
+              active
+                ? "bg-surface-raised font-semibold text-foreground shadow-card hover:text-foreground"
+                : "hover:bg-surface-raised/60",
             )}
           >
             {option.label}
