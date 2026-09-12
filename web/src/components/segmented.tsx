@@ -31,6 +31,7 @@ export function Segmented<T extends string | number | boolean>({
   ariaLabel,
   fill = false,
   mono = false,
+  bare = false,
   className,
 }: {
   value: T
@@ -40,6 +41,12 @@ export function Segmented<T extends string | number | boolean>({
   /** 容器内等分（表单里的三选一），而不是按内容宽度排布（工具栏） */
   fill?: boolean
   mono?: boolean
+  /**
+   * 裸放：不画自己的灰容器。
+   * 工具栏本身已经是"浅灰画布 + 白浮块"（Cards-on-Canvas），
+   * 再套一层同色的灰容器只会让两组控件的边界糊在一起。
+   */
+  bare?: boolean
   className?: string
 }) {
   return (
@@ -48,7 +55,8 @@ export function Segmented<T extends string | number | boolean>({
       aria-label={ariaLabel}
       className={cn(
         // rounded-lg 与前台分类容器一致（原来这里也是 rounded-md，两种圆角并存）
-        "flex items-center gap-0.5 rounded-lg bg-muted p-0.5",
+        "flex items-center gap-0.5 rounded-lg p-0.5",
+        bare ? "bg-transparent" : "bg-muted",
         fill ? "w-full" : "w-fit",
         className,
       )}

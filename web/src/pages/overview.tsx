@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState, type ReactNode } from "react"
-import { ToggleChip, chipGroupClass } from "@/components/toggle-chip"
+import { ToggleChip, chipGroupBareClass } from "@/components/toggle-chip"
 import { Link, useSearchParams } from "react-router"
 import {
   ArrowClockwise,
@@ -217,6 +217,19 @@ function SortableHead({
   )
 }
 
+/*
+  告警态 KPI 卡片。
+  改前只有数值与说明文字染色，整张卡还是白的 —— 一眼扫过去 5 张卡一样重，
+  "1 台离线"要靠读文字才发现。现在超阈值的卡片**整卡染色**（底 + 描边 + 图标），
+  与软底徽章用同一套配方，只是铺到卡片这一层。
+
+  底色仍由 token 加透明度得来（`--warn` / `--crit` 的 8%），不引第二套调色板。
+*/
+const CARD_TONE: Record<"warn" | "crit", string> = {
+  warn: "border-warn/25 bg-warn/8",
+  crit: "border-crit/25 bg-crit/8",
+}
+
 export function OverviewPage() {
   useFleetTick()
   const [params, setParams] = useSearchParams()
@@ -312,7 +325,9 @@ export function OverviewPage() {
   }, [servers, sortKey, sortDir])
 
   const online = fleet.filter((item) => item.status !== "off").length
-  const firing = alertEvents.filter((event) => event.state === "firing").length
+  const firingEvents = alertEvents.filter((event) => event.state === "firing")
+  const firing = firingEvents.length
+  const firingCrit = firingEvents.filter((event) => event.level === "crit").length
   const staleAgents = fleet.filter(
     (item) => compareVersion(item.agent, LATEST_AGENT) < 0,
   ).length
@@ -363,7 +378,8 @@ export function OverviewPage() {
             {
               label: "在线",
               value: `${online} / ${fleet.length}`,
-              tone: online === fleet.length ? "ok" : "warn",
+              // 有节点离线 = 有机器是 down 的 → crit（与前台状态通栏同一判据）
+              tone: online === fleet.length ? null : ("crit" as const),
               note:
                 online === fleet.length
                   ? "全部在线"
@@ -373,14 +389,20 @@ export function OverviewPage() {
             {
               label: "触发中告警",
               value: String(firing),
-              tone: firing > 0 ? "warn" : null,
+              // 触发中的事件里有 crit 级别的才是 crit，否则 warn
+              tone:
+                firing === 0
+                  ? null
+                  : firingCrit > 0
+                    ? ("crit" as const)
+                    : ("warn" as const),
               note: firing > 0 ? "需要处理" : "没有触发中的告警",
               icon: WarningCircle,
             },
             {
               label: "agent 落后",
               value: `${staleAgents} 台`,
-              tone: staleAgents > 0 ? "warn" : null,
+              tone: staleAgents > 0 ? ("warn" as const) : null,
               note: staleAgents > 0 ? `最新 v${LATEST_AGENT}` : "都跑在最新版",
               icon: ArrowClockwise,
             },
@@ -406,16 +428,36 @@ export function OverviewPage() {
               icon: Bell,
             },
           ].map((item) => (
-            <div key={item.label} className="card flex flex-col gap-1.5 p-3">
-              <dt className="flex items-center gap-1.5 text-2xs text-muted-foreground">
-                <item.icon className="size-3.5 shrink-0 text-muted-foreground/60" />
+            <div
+              key={item.label}
+              className={cn(
+                "card flex flex-col gap-1.5 p-3",
+                item.tone && CARD_TONE[item.tone],
+              )}
+            >
+              <dt
+                className={cn(
+                  "flex items-center gap-1.5 text-2xs",
+                  item.tone ? "text-foreground/70" : "text-muted-foreground",
+                )}
+              >
+                <item.icon
+                  className={cn(
+                    "size-3.5 shrink-0",
+                    item.tone === "crit"
+                      ? "text-crit-text"
+                      : item.tone === "warn"
+                        ? "text-warn-text"
+                        : "text-muted-foreground/60",
+                  )}
+                />
                 <span className="truncate">{item.label}</span>
               </dt>
               <dd
                 className={cn(
                   "num truncate text-lg font-semibold leading-none tracking-tight",
+                  item.tone === "crit" && "text-crit-text",
                   item.tone === "warn" && "text-warn-text",
-                  item.tone === "ok" && "text-foreground",
                 )}
               >
                 {item.value}
@@ -423,7 +465,11 @@ export function OverviewPage() {
               <div
                 className={cn(
                   "flex items-center gap-1.5 text-2xs",
-                  item.tone === "warn" ? "text-warn-text" : "text-subtle",
+                  item.tone === "crit"
+                    ? "text-crit-text"
+                    : item.tone === "warn"
+                      ? "text-warn-text"
+                      : "text-subtle",
                 )}
               >
                 {item.tone && (
@@ -431,7 +477,7 @@ export function OverviewPage() {
                     aria-hidden
                     className={cn(
                       "size-[6px] shrink-0 rounded-full",
-                      item.tone === "warn" ? "bg-warn" : "bg-ok",
+                      item.tone === "crit" ? "bg-crit" : "bg-warn",
                     )}
                   />
                 )}
@@ -452,9 +498,11 @@ export function OverviewPage() {
         而这里两组本来就是同一功能（筛选），所以各加一个 11px 的组名消歧义
         （两个组都以「全部」开头，不加就不知道指的是哪个）。
 
-        整个工具栏再装进一层白色 card，形成三级层次：
-        页面底(<--background) < 工具栏(<--card) < 控件组(<--muted)。
-        所以搜索框用"透明 + 边框"就够 —— 它四周已经是白的，不必再靠白底区分自己。
+        **工具栏本身是"浅灰画布 + 白浮块"（Cards-on-Canvas）**：
+        容器用 `--muted`，搜索框与两组筛选的选中块都是白的浮在画布上。
+        所以两组筛选**不再各自套灰容器**（画布已经是灰的，再套一层边界就糊了），
+        改用一条竖分隔线把"输入"与"筛选"分开 —— 这是 §AV 那条"三级层次"的改写：
+        原来刻意避开"画布与控件组同色"，现在反过来把画布提上来、让控件组消失。
       */}
       {/*
         窄屏用**显式 grid**、宽屏回到 flex：
@@ -463,7 +511,7 @@ export function OverviewPage() {
         0.4px 这种边界不能靠调间距去赌，grid 两列是确定的：
         第一行 [搜索 | 计数]，状态与标签各占一整行。
       */}
-      <div className="card mb-3 mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 p-2 sm:flex sm:flex-wrap sm:gap-x-3">
+      <div className="mb-3 mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 rounded-lg border bg-muted/60 p-1.5 sm:flex sm:flex-wrap sm:gap-x-2.5">
         {/*
           窄屏让搜索框 flex-1 与右侧的「12 台」共享一行：
           它原本 w-full 独占一行，导致工具栏多一行、且计数在标签那一行被挤到
@@ -479,9 +527,15 @@ export function OverviewPage() {
             onChange={(event) => setQuery(event.target.value)}
             placeholder="搜索名称、IP、标签"
             aria-label="搜索名称、IP、标签"
-            className="h-8 pl-8 text-xs"
+            className="h-8 bg-card pl-8 text-xs"
           />
         </div>
+
+        {/* 输入与筛选之间的竖分隔线（参考图里的那条线） */}
+        <span
+          aria-hidden
+          className="hidden h-5 w-px shrink-0 bg-border sm:block"
+        />
 
         <div className="col-span-2 flex items-center gap-2 sm:w-auto">
           {/*
@@ -496,6 +550,7 @@ export function OverviewPage() {
             value={filter}
             onChange={setFilter}
             /* 窄屏撑满一行：否则它单独占一行只用到 38%，是最难看的"孤行" */
+            bare
             className="w-full sm:w-fit"
             options={[
               { value: "all", label: "全部" },
@@ -507,7 +562,7 @@ export function OverviewPage() {
 
         <div className="col-span-2 flex items-center gap-2">
           <span className="hidden text-2xs text-subtle xl:inline">标签</span>
-          <div className={chipGroupClass} role="group" aria-label="按标签筛选">
+          <div className={chipGroupBareClass} role="group" aria-label="按标签筛选">
             {TAGS.map((item) => (
               <ToggleChip
                 key={item}
@@ -647,7 +702,12 @@ export function OverviewPage() {
               {sorted.map((item) => (
                 <TableRow
                   key={item.id}
-                  className="group/row cursor-pointer"
+                  /*
+                    斑马纹：这张表横向有 1000px，扫一行很容易串到下一行；
+                    交替底色比只靠 1px 分隔线更容易横向跟行。
+                    底色用 /20（比 hover 的 /50 轻），悬停仍然明确。
+                  */
+                  className="group/row cursor-pointer odd:bg-muted/20"
                   onClick={() => setParams({ server: item.id })}
                 >
                   <TableCell className="h-11 px-3">
@@ -669,9 +729,22 @@ export function OverviewPage() {
                       >
                         {item.name}
                       </Link>
-                      <span className="truncate text-2xs text-subtle">
-                        {/* 标签是配置，可能被「编辑标签」改过，不能直接读 mock */}
-                        {nodeTags(settings, item.id, item.tags).join(" · ")}
+                      {/*
+                        标签从裸文本（"香港 · 生产"）改成一个一个 Pill。
+                        用**中性**底色而不是前台的品牌淡蓝：这一列有 12 行 × 2~3 个，
+                        全用品牌色会铺成一片蓝，也削弱"单一蓝强调色"的纪律 ——
+                        品牌色留给真正的强调（选中态、导航指示条）。
+                        标签是配置，可能被「编辑标签」改过，不能直接读 mock。
+                      */}
+                      <span className="flex min-w-0 items-center gap-1">
+                        {nodeTags(settings, item.id, item.tags).map((tag) => (
+                          <span
+                            key={tag}
+                            className="truncate rounded-[4px] bg-muted px-1.5 text-2xs leading-5 text-muted-foreground"
+                          >
+                            {tag}
+                          </span>
+                        ))}
                       </span>
                     </div>
                   </TableCell>

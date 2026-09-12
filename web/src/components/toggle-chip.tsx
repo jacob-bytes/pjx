@@ -12,6 +12,10 @@ import { Check } from "@phosphor-icons/react"
 export const chipGroupClass =
   "flex flex-wrap items-center gap-0.5 rounded-lg bg-muted p-0.5"
 
+/** 同上，但融进画布（工具栏已经是一层浅灰画布时用这个） */
+export const chipGroupBareClass =
+  "flex flex-wrap items-center gap-0.5 rounded-lg p-0.5"
+
 /**
  * 切换胶囊。
  *

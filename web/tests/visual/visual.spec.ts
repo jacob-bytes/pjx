@@ -173,6 +173,20 @@ test.describe("后台", () => {
     })
   })
 
+  /*
+    后台的深色基线。§BA 给 KPI 卡片加了"告警态整卡染色"、工具栏改成浅灰画布 ——
+    这些都是**深色下另一种观感**的表面，而此前后台只有浅色基线。
+  */
+  test("总览 · 深色", async ({ page }) => {
+    await useDarkTheme(page)
+    await makeDeterministic(page)
+    await page.goto("/admin/")
+    await waitForData(page)
+    await expect(page).toHaveScreenshot("admin-overview-dark.png", {
+      fullPage: true,
+    })
+  })
+
   test("节点详情 Sheet · 浅色", async ({ page }) => {
     await makeDeterministic(page)
     await page.goto("/admin/?server=hk-01")
