@@ -304,7 +304,7 @@ function CreateProbeSheet({
               onBlur={() => setTouched(true)}
               placeholder="例如：主站可用性"
               aria-invalid={Boolean(show("name"))}
-              className="h-8 text-xs"
+              className="h-8 text-xs touch:h-11"
             />
             {show("name") && (
               <p className="text-2xs text-crit-text">{show("name")}</p>
@@ -341,7 +341,7 @@ function CreateProbeSheet({
               spellCheck={false}
               autoComplete="off"
               aria-invalid={Boolean(show("target"))}
-              className="num h-8 text-xs"
+              className="num h-8 text-xs touch:h-11"
             />
             {show("target") ? (
               <p className="text-2xs text-crit-text">{show("target")}</p>
@@ -361,7 +361,7 @@ function CreateProbeSheet({
                 value={form.interval}
                 onValueChange={(value) => patch({ interval: value })}
               >
-                <SelectTrigger className="h-8 w-full text-xs">
+                <SelectTrigger className="h-8 w-full text-xs touch:h-11!">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -384,7 +384,7 @@ function CreateProbeSheet({
                 onBlur={() => setTouched(true)}
                 inputMode="numeric"
                 aria-invalid={Boolean(show("timeoutSec"))}
-                className="num h-8 text-xs"
+                className="num h-8 text-xs touch:h-11"
               />
               {show("timeoutSec") && (
                 <p className="text-2xs text-crit-text">{show("timeoutSec")}</p>
@@ -422,7 +422,7 @@ function CreateProbeSheet({
                 value={form.failThreshold}
                 onValueChange={(value) => patch({ failThreshold: value })}
               >
-                <SelectTrigger className="h-8 w-full text-xs">
+                <SelectTrigger className="h-8 w-full text-xs touch:h-11!">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -440,7 +440,7 @@ function CreateProbeSheet({
                 value={form.notifications}
                 onValueChange={(value) => patch({ notifications: value })}
               >
-                <SelectTrigger className="h-8 w-full text-xs">
+                <SelectTrigger className="h-8 w-full text-xs touch:h-11!">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -459,14 +459,14 @@ function CreateProbeSheet({
           <Button
             variant="outline"
             size="sm"
-            className="h-8 px-3 text-xs"
+            className="h-8 px-3 text-xs touch:h-11"
             onClick={close}
           >
             取消
           </Button>
           <Button
             size="sm"
-            className="h-8 px-3 text-xs"
+            className="h-8 px-3 text-xs touch:h-11"
             onClick={() => {
               setTouched(true)
               if (!valid) return
@@ -568,12 +568,12 @@ export function ProbesPage() {
             onChange={(event) => setQuery(event.target.value)}
             placeholder="搜索任务或目标"
             aria-label="搜索任务或目标"
-            className="h-8 bg-card pl-8 text-xs"
+            className="h-8 bg-card pl-8 text-xs touch:h-11"
           />
         </div>
         <Button
           size="sm"
-          className="ml-auto h-8 gap-1.5 px-3 text-xs"
+          className="ml-auto h-8 gap-1.5 px-3 text-xs touch:h-11"
           onClick={() => setParams({ new: "1" })}
         >
           <Plus className="size-3.5" />
@@ -589,7 +589,7 @@ export function ProbesPage() {
           action={
             <Button
               size="sm"
-              className="h-8 gap-1.5 px-3 text-xs"
+              className="h-8 gap-1.5 px-3 text-xs touch:h-11"
               onClick={() => setParams({ new: "1" })}
             >
               <Plus className="size-3.5" />

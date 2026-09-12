@@ -63,7 +63,9 @@ export function Segmented<T extends string | number | boolean>({
             aria-checked={active}
             onClick={() => onChange(option.value)}
             className={cn(
-              "h-7 min-w-0 rounded-md px-2.5 text-2xs text-muted-foreground transition-colors dur-2 hover:text-foreground",
+              // touch:h-11：触屏下 28 → 44px（与前台分类胶囊同一套做法）
+              // touch:min-w-11：两字标签只有 42px 宽，补到 44（高度由 touch:h-11 给）
+              "h-7 min-w-0 rounded-md px-2.5 text-2xs text-muted-foreground transition-colors dur-2 touch:h-11 touch:min-w-11 hover:text-foreground",
               fill && "flex-1",
               mono && "num",
               active

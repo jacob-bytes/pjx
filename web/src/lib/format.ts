@@ -10,6 +10,16 @@ export function clockTime(date: Date = new Date()) {
   return date.toLocaleTimeString("zh-CN", { hour12: false })
 }
 
+/**
+ * 最后上报的展示文案。与 `lastSeenSec` 是"一份数据、一处格式"的关系 ——
+ * 之前把它写死在 mock 里，排序就没法用它。
+ */
+export function formatLastSeen(seconds: number) {
+  if (seconds < 60) return `${seconds.toFixed(1)}s 前`
+  if (seconds < 3600) return `${Math.round(seconds / 60)} 分钟前`
+  return `${Math.round(seconds / 3600)} 小时前`
+}
+
 export function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }

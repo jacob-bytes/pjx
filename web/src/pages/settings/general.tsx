@@ -44,7 +44,7 @@ export function GeneralPage() {
                 value={draft.siteName}
                 onChange={(event) => patch({ siteName: event.target.value })}
                 placeholder="例如：pjx 监控"
-                className="h-8 text-xs"
+                className="h-8 text-xs touch:h-11"
               />
             </SettingsField>
 
@@ -56,7 +56,7 @@ export function GeneralPage() {
                 value={draft.timezone}
                 onValueChange={(value) => patch({ timezone: value })}
               >
-                <SelectTrigger className="h-8 w-full text-xs">
+                <SelectTrigger className="h-8 w-full text-xs touch:h-11!">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

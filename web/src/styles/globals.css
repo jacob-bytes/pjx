@@ -349,6 +349,43 @@
 }
 
 /*
+  触控命中区：`Switch` 视觉尺寸 32×18，手指点不准；而它是 shadcn 上游组件
+  （改尺寸会把 thumb 的 `translate-x-[calc(100%-2px)]` 算错），所以**不动组件**，
+  用一层伪元素把命中区撑到 44px —— 也就是 §C3 那句"图标小但留白大"。
+
+  写成全局规则而不是逐个调用处加 className：全站 7 个 Switch 散在 6 个文件里，
+  逐个加一定会漏（这正是 §C3 之后仍然大面积不达标的原因）。
+  与 C4 的 `[data-cvd="on"] [data-shape]` 同一思路 —— 全局开关式的规则就该放这里。
+*/
+/*
+  通用的"扩大命中区"标记：给那些**体积由内容决定、又不适合加内边距**的小按钮用
+  （例如表格里 38×24 的「静音」）。加内边距会把行撑高，伪元素不会。
+*/
+@media (pointer: coarse) {
+  [data-tap-area] {
+    position: relative;
+  }
+  [data-tap-area]::after {
+    content: "";
+    position: absolute;
+    /* ±14 才够把 16×16 的关闭按钮（以及 40×32 的排序表头）撑到 44 */
+    inset: -14px;
+  }
+}
+
+@media (pointer: coarse) {
+  [role="switch"] {
+    position: relative;
+  }
+  [role="switch"]::after {
+    content: "";
+    position: absolute;
+    /* 32×18 → 约 44×46 */
+    inset: -14px -6px;
+  }
+}
+
+/*
   卡片表面。
   之前同一个界面里卡片圆角有 8px 和 12px 两种写法（rounded-md / rounded-lg），
   内边距有 p-3 / p-3.5 / p-4 三种，阴影还有带与不带 —— 并排看能看出不齐。

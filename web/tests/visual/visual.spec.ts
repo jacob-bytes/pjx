@@ -118,6 +118,51 @@ test.describe("后台", () => {
     await expect(page.locator("#site-name")).toHaveValue("旧站点")
   })
 
+  /*
+    侧栏折叠 + 面包屑（§AX）。
+    折叠是纯本机偏好（localStorage），所以断言里要覆盖"刷新后还在"。
+  */
+  test("后台 · 侧栏折叠与面包屑", async ({ page }) => {
+    await makeDeterministic(page)
+    await page.goto("/admin/")
+    await waitForData(page)
+
+    const sideW = () =>
+      page.locator("aside").evaluate((el) => Math.round(el.getBoundingClientRect().width))
+
+    await expect(page.locator('nav[aria-label="面包屑"]')).toHaveText("总览")
+    expect(await sideW()).toBe(216)
+
+    // 宽度是过渡出来的（dur-3 = 240ms），所以用 poll 而不是立刻断言
+    await page.getByRole("button", { name: "折叠侧栏" }).click()
+    await expect.poll(sideW).toBe(72)
+
+    // 刷新后仍是折叠状态
+    await page.reload()
+    await waitForData(page)
+    expect(await sideW()).toBe(72)
+
+    // ⌘B 展开，并检查二级面包屑
+    await page.keyboard.press("Meta+b")
+    await expect.poll(sideW).toBe(216)
+    await page.goto("/admin/settings/retention")
+    await waitForData(page)
+    await expect(page.locator('nav[aria-label="面包屑"]')).toHaveText(
+      "设置/数据与保留",
+    )
+  })
+
+  test("后台 · 侧栏折叠后的样子", async ({ page }) => {
+    await makeDeterministic(page)
+    await page.goto("/admin/")
+    await waitForData(page)
+    await page.getByRole("button", { name: "折叠侧栏" }).click()
+    await page.waitForTimeout(400) // 等宽度过渡（dur-3 = 240ms）
+    await expect(page).toHaveScreenshot("admin-sidebar-collapsed.png", {
+      fullPage: true,
+    })
+  })
+
   test("总览 · 浅色", async ({ page }) => {
     await makeDeterministic(page)
     await page.goto("/admin/")

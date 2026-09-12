@@ -99,13 +99,13 @@ export function AlertsPage() {
         <TabsList className="h-8 justify-start gap-1 rounded-none bg-transparent p-0">
           <TabsTrigger
             value="events"
-            className="h-8 rounded-none border-0 border-b-2 border-transparent bg-transparent px-2.5 text-xs font-normal text-muted-foreground shadow-none data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+            className="h-8 rounded-none border-0 border-b-2 border-transparent bg-transparent px-2.5 text-xs font-normal text-muted-foreground shadow-none data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none touch:h-11"
           >
             事件
           </TabsTrigger>
           <TabsTrigger
             value="rules"
-            className="h-8 rounded-none border-0 border-b-2 border-transparent bg-transparent px-2.5 text-xs font-normal text-muted-foreground shadow-none data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+            className="h-8 rounded-none border-0 border-b-2 border-transparent bg-transparent px-2.5 text-xs font-normal text-muted-foreground shadow-none data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none touch:h-11"
           >
             规则
           </TabsTrigger>
@@ -134,7 +134,7 @@ export function AlertsPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 px-3 text-xs"
+                className="h-8 px-3 text-xs touch:h-11"
                 onClick={() => setLevel("all")}
               >
                 查看全部
@@ -202,6 +202,7 @@ export function AlertsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        data-tap-area
                         className="h-6 px-2 text-2xs text-muted-foreground"
                       >
                         静音

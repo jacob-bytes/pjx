@@ -29,7 +29,12 @@ export interface Server {
   load: number
   status: Status
   offline?: boolean
-  lastSeen: string
+  /**
+   * 最后上报距现在多少秒。
+   * 存**数值**而不是 "0.6s 前" 这样的字符串：表格要按它排序，
+   * 拿展示文案去 parse 是错的（格式一改排序就静默失效）。
+   */
+  lastSeenSec: number
   heartbeat: Status[]
   cpuSeries: number[]
   memSeries: number[]
@@ -130,7 +135,7 @@ export const fleet: Server[] = [
     tx: 0.42,
     load: 0.8,
     status: "ok",
-    lastSeen: "0.6s 前",
+    lastSeenSec: 0.6,
   }),
   server({
     id: "hk-02",
@@ -148,7 +153,7 @@ export const fleet: Server[] = [
     tx: 0.96,
     load: 1.4,
     status: "warn",
-    lastSeen: "0.7s 前",
+    lastSeenSec: 0.7,
   }),
   server({
     id: "tokyo-01",
@@ -166,7 +171,7 @@ export const fleet: Server[] = [
     tx: 0.31,
     load: 0.5,
     status: "ok",
-    lastSeen: "0.5s 前",
+    lastSeenSec: 0.5,
   }),
   server({
     id: "tokyo-02",
@@ -184,7 +189,7 @@ export const fleet: Server[] = [
     tx: 0.05,
     load: 0.1,
     status: "ok",
-    lastSeen: "0.6s 前",
+    lastSeenSec: 0.6,
   }),
   server({
     id: "singapore-01",
@@ -202,7 +207,7 @@ export const fleet: Server[] = [
     tx: 1.18,
     load: 2.1,
     status: "ok",
-    lastSeen: "0.6s 前",
+    lastSeenSec: 0.6,
   }),
   server({
     id: "frankfurt-01",
@@ -220,7 +225,7 @@ export const fleet: Server[] = [
     tx: 0.74,
     load: 1.2,
     status: "ok",
-    lastSeen: "0.7s 前",
+    lastSeenSec: 0.7,
   }),
   server({
     id: "lax-01",
@@ -239,7 +244,7 @@ export const fleet: Server[] = [
     load: 0,
     status: "off",
     offline: true,
-    lastSeen: "38 分钟前",
+    lastSeenSec: 2280,
   }),
   server({
     id: "hz-01",
@@ -257,7 +262,7 @@ export const fleet: Server[] = [
     tx: 2.06,
     load: 3.4,
     status: "ok",
-    lastSeen: "0.5s 前",
+    lastSeenSec: 0.5,
   }),
   server({
     id: "sh-01",
@@ -275,7 +280,7 @@ export const fleet: Server[] = [
     tx: 1.31,
     load: 2.7,
     status: "ok",
-    lastSeen: "0.6s 前",
+    lastSeenSec: 0.6,
   }),
   server({
     id: "gz-01",
@@ -293,7 +298,7 @@ export const fleet: Server[] = [
     tx: 0.04,
     load: 0.1,
     status: "ok",
-    lastSeen: "0.6s 前",
+    lastSeenSec: 0.6,
   }),
   server({
     id: "sin-aws-01",
@@ -311,7 +316,7 @@ export const fleet: Server[] = [
     tx: 0.88,
     load: 1.1,
     status: "ok",
-    lastSeen: "0.5s 前",
+    lastSeenSec: 0.5,
   }),
   server({
     id: "nas-01",
@@ -329,7 +334,7 @@ export const fleet: Server[] = [
     tx: 0.62,
     load: 0.2,
     status: "warn",
-    lastSeen: "0.6s 前",
+    lastSeenSec: 0.6,
   }),
 ]
 

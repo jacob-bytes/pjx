@@ -154,7 +154,7 @@ export function RetentionPage() {
                       value={draft.memoryKeep}
                       onValueChange={(value) => patch({ memoryKeep: value })}
                     >
-                      <SelectTrigger size="sm" className="h-7 w-[120px] text-xs">
+                      <SelectTrigger size="sm" className="w-[120px] text-xs touch:h-11!">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -198,7 +198,7 @@ export function RetentionPage() {
                         onValueChange={(value) => patch({ rawKeep: value })}
                         disabled={!draft.rawEnabled}
                       >
-                        <SelectTrigger size="sm" className="h-7 w-[110px] text-xs">
+                        <SelectTrigger size="sm" className="w-[110px] text-xs touch:h-11!">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -234,7 +234,7 @@ export function RetentionPage() {
                       value={draft.m1Keep}
                       onValueChange={(value) => patch({ m1Keep: value })}
                     >
-                      <SelectTrigger size="sm" className="h-7 w-[120px] text-xs">
+                      <SelectTrigger size="sm" className="w-[120px] text-xs touch:h-11!">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -269,7 +269,7 @@ export function RetentionPage() {
                       value={draft.h1Keep}
                       onValueChange={(value) => patch({ h1Keep: value })}
                     >
-                      <SelectTrigger size="sm" className="h-7 w-[120px] text-xs">
+                      <SelectTrigger size="sm" className="w-[120px] text-xs touch:h-11!">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -327,7 +327,7 @@ export function RetentionPage() {
             <Button
               variant="outline"
               size="sm"
-              className="h-8 px-3 text-xs"
+              className="h-8 px-3 text-xs touch:h-11"
               onClick={() => setConfirming("purge")}
             >
               立即清理
@@ -335,7 +335,7 @@ export function RetentionPage() {
             <Button
               variant="outline"
               size="sm"
-              className="h-8 px-3 text-xs"
+              className="h-8 px-3 text-xs touch:h-11"
               onClick={() => setConfirming("vacuum")}
             >
               压缩数据库

@@ -22,6 +22,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { formatLastSeen } from "@/lib/format"
 import { alertEvents, fleet, type Server } from "@/lib/mock"
 import { cn } from "@/lib/utils"
 
@@ -135,7 +136,7 @@ export function ServerSheet({ server }: { server: Server }) {
             <Button
               variant="outline"
               size="sm"
-              className="h-7 px-2.5 text-xs"
+              className="h-7 px-2.5 text-xs touch:h-11"
               onClick={copyIp}
             >
               <Copy className="size-3.5" />
@@ -147,7 +148,7 @@ export function ServerSheet({ server }: { server: Server }) {
                   variant="outline"
                   size="icon"
                   aria-label="更多操作"
-                  className="size-7 text-muted-foreground"
+                  className="size-7 text-muted-foreground touch:size-11"
                 >
                   <DotsThree className="size-3.5" />
                 </Button>
@@ -183,7 +184,7 @@ export function ServerSheet({ server }: { server: Server }) {
         </div>
         <SheetDescription className="num mt-1.5 text-2xs text-subtle">
           {server.ip} · {server.region} · {server.os} · agent v{server.agent} ·
-          最后上报 {server.lastSeen}
+          最后上报 {formatLastSeen(server.lastSeenSec)}
         </SheetDescription>
       </SheetHeader>
 
@@ -197,7 +198,7 @@ export function ServerSheet({ server }: { server: Server }) {
               <TabsTrigger
                 key={tab.value}
                 value={tab.value}
-                className="h-9 rounded-none border-0 border-b-2 border-transparent bg-transparent px-2.5 text-xs font-normal text-muted-foreground shadow-none data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                className="h-9 rounded-none border-0 border-b-2 border-transparent bg-transparent px-2.5 text-xs font-normal text-muted-foreground shadow-none touch:h-11 data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
               >
                 {tab.label}
               </TabsTrigger>
@@ -214,7 +215,7 @@ export function ServerSheet({ server }: { server: Server }) {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-6 px-2 text-2xs"
+                  className="h-6 px-2 text-2xs touch:h-11 touch:min-w-11"
                   onClick={() => setEditingTags(true)}
                 >
                   编辑
@@ -267,7 +268,7 @@ export function ServerSheet({ server }: { server: Server }) {
                   label="最后上报"
                   value={
                     <span className={cn(offline && "text-crit-text")}>
-                      {server.lastSeen}
+                      {formatLastSeen(server.lastSeenSec)}
                     </span>
                   }
                 />

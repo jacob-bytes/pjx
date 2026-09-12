@@ -87,7 +87,7 @@ export function NotificationsPage() {
                   onChange={(event) => patch({ botToken: event.target.value })}
                   spellCheck={false}
                   autoComplete="off"
-                  className="num h-8 pr-9 text-xs"
+                  className="num h-8 pr-9 text-xs touch:h-11"
                 />
                 {/* 输入密钥时总得能核对一遍自己粘了什么 —— 只能盲目粘贴是没法排错的 */}
                 <IconButton
@@ -111,7 +111,7 @@ export function NotificationsPage() {
                   id="chat-id"
                   value={draft.chatId}
                   onChange={(event) => patch({ chatId: event.target.value })}
-                  className="num h-8 text-xs"
+                  className="num h-8 text-xs touch:h-11"
                 />
               </SettingsField>
               <SettingsField label="Topic ID（可选）" htmlFor="topic-id">
@@ -120,7 +120,7 @@ export function NotificationsPage() {
                   value={draft.topicId}
                   onChange={(event) => patch({ topicId: event.target.value })}
                   placeholder="群组话题 ID"
-                  className="num h-8 text-xs"
+                  className="num h-8 text-xs touch:h-11"
                 />
               </SettingsField>
             </div>
@@ -129,7 +129,7 @@ export function NotificationsPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 gap-1.5 px-3 text-xs"
+                className="h-8 gap-1.5 px-3 text-xs touch:h-11"
                 disabled={test.kind === "sending"}
                 onClick={runTest}
               >

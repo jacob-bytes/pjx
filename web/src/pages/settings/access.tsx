@@ -71,7 +71,7 @@ export function AccessPage() {
             <Button
               variant="outline"
               size="sm"
-              className="h-7 px-2 text-2xs"
+              className="h-7 px-2 text-2xs touch:h-11"
               onClick={() => copy(INSTALL_COMMAND, "已复制安装命令")}
             >
               <Copy className="size-3" />
@@ -90,7 +90,7 @@ export function AccessPage() {
           action={
             <Button
               size="sm"
-              className="h-7 gap-1.5 px-2 text-2xs"
+              className="h-7 gap-1.5 px-2 text-2xs touch:h-11"
               onClick={() => setCreating(true)}
             >
               <Plus className="size-3" />
@@ -135,7 +135,7 @@ export function AccessPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 px-2 text-2xs text-destructive"
+                        className="h-7 px-2 text-2xs text-destructive touch:h-11 touch:min-w-11"
                         onClick={() => setRevoking(token)}
                       >
                         撤销
@@ -178,7 +178,7 @@ export function AccessPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 gap-1.5 px-2 text-2xs"
+                    className="h-7 gap-1.5 px-2 text-2xs touch:h-11"
                     onClick={() => copy(issued.token, "已复制令牌")}
                   >
                     <Copy className="size-3" />
@@ -201,7 +201,7 @@ export function AccessPage() {
                   maxLength={32}
                   onChange={(event) => setName(event.target.value)}
                   placeholder="例如：hk-01 生产"
-                  className="h-8 text-xs"
+                  className="h-8 text-xs touch:h-11"
                 />
                 <p className="text-2xs text-subtle">
                   令牌由 16 字节随机数生成，只保存在本机配置里。
@@ -214,7 +214,7 @@ export function AccessPage() {
             {issued ? (
               <Button
                 size="sm"
-                className="h-8 px-3 text-xs"
+                className="h-8 px-3 text-xs touch:h-11"
                 onClick={closeCreate}
               >
                 完成
@@ -224,14 +224,14 @@ export function AccessPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 px-3 text-xs"
+                  className="h-8 px-3 text-xs touch:h-11"
                   onClick={closeCreate}
                 >
                   取消
                 </Button>
                 <Button
                   size="sm"
-                  className="h-8 px-3 text-xs"
+                  className="h-8 px-3 text-xs touch:h-11"
                   disabled={!canCreate}
                   onClick={() => {
                     const next: AgentToken = {

@@ -5,6 +5,7 @@ import {
   ArrowClockwise,
   Bell,
   Broadcast,
+  CaretUp,
   DesktopTower,
   DotsThree,
   MagnifyingGlass,
@@ -37,7 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { TableSkeleton } from "@/components/ui/skeleton"
+import { Skeleton, TableSkeleton } from "@/components/ui/skeleton"
 import {
   alertEvents,
   alertRules,
@@ -49,6 +50,7 @@ import {
 } from "@/lib/mock"
 import { METRIC_LIMITS } from "@/lib/settings"
 import { pickParam } from "@/lib/url"
+import { formatLastSeen } from "@/lib/format"
 import { TABLE_SCROLLER } from "@/lib/layout"
 import { cn } from "@/lib/utils"
 
@@ -148,6 +150,73 @@ function ToneBadge({
   )
 }
 
+/*
+  表格排序。
+
+  这是盘点里价值最高的一条：**前台有 6 个排序项，后台一个都没有** ——
+  而后台的主要用途恰恰是"找出最需要处理的那几台"（§B1 给前台做了排序）。
+
+  做成**可点表头**而不是工具栏里的下拉：表格的惯例就是点列头排序，
+  而且不用再往已经排满的工具栏里塞一个控件（移动端工具栏已经三行）。
+  排序键进 URL（`?sort=`&`?dir=`），可分享、可回退，与其它筛选一致。
+
+  离线节点一律沉底（照 §B1 的判断）：排序是为了找"最忙/最旧"的，
+  把断线的排最前会盖住真正要看的东西。
+*/
+const SORTS = {
+  name: "节点",
+  agent: "agent",
+  lastSeen: "最后上报",
+  concern: "关注",
+} as const
+
+type SortKey = keyof typeof SORTS
+
+function SortableHead({
+  sortKey,
+  active,
+  dir,
+  onSort,
+  className,
+  children,
+}: {
+  sortKey: SortKey
+  active: boolean
+  dir: "asc" | "desc"
+  onSort: (key: SortKey, dir: "asc" | "desc") => void
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <TableHead
+      className={cn("h-9 px-3", className)}
+      aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(sortKey, active && dir === "asc" ? "desc" : "asc")}
+        title={`按${SORTS[sortKey]}排序`}
+        // 表头按钮只有 40×17：补高度，触屏下再用伪元素把命中区撑开
+        data-tap-area
+        className={cn(
+          "inline-flex h-8 items-center gap-1 rounded-[3px] text-xs font-medium transition-colors dur-2 hover:text-foreground",
+          active ? "text-foreground" : "text-muted-foreground",
+        )}
+      >
+        {children}
+        {/* 指示器用形状而不是颜色：未排序时是一条淡横线，排序后是箭头 */}
+        <CaretUp
+          className={cn(
+            "size-3 shrink-0 transition-opacity dur-2",
+            active ? "opacity-100" : "opacity-0",
+            active && dir === "desc" && "rotate-180",
+          )}
+        />
+      </button>
+    </TableHead>
+  )
+}
+
 export function OverviewPage() {
   useFleetTick()
   const [params, setParams] = useSearchParams()
@@ -161,6 +230,13 @@ export function OverviewPage() {
   const query = params.get("q") ?? ""
   const filter = pickParam(params, "state", ["all", "ok", "bad"] as const, "all")
   const tag = pickParam(params, "tag", TAGS, "全部")
+  const sortKey = pickParam(
+    params,
+    "sort",
+    ["name", "agent", "lastSeen", "concern"] as const,
+    "name",
+  )
+  const sortDir = pickParam(params, "dir", ["asc", "desc"] as const, "asc")
 
   const patchParams = (
     patch: Record<string, string | null>,
@@ -179,6 +255,8 @@ export function OverviewPage() {
     patchParams({ state: value === "all" ? null : value })
   const setTag = (value: string) =>
     patchParams({ tag: value === "全部" ? null : value })
+  const setSort = (key: SortKey, dir: "asc" | "desc") =>
+    patchParams({ sort: key === "name" ? null : key, dir: dir === "asc" ? null : dir })
 
   const { loaded } = useFleetStatus()
   const { settings } = useSettings()
@@ -203,6 +281,35 @@ export function OverviewPage() {
       )
     })
   }, [deferredQuery, filter, tag])
+
+  /*
+    离线沉底 + 选中列的值比较。`concern` 用"最紧指标占阈值的比例"，
+    没有超阈值的节点按 -1 排在最后。
+  */
+  const sorted = useMemo(() => {
+    const ratioOf = (item: Server) => {
+      const concern = tightestMetric(item)
+      return concern ? concern.value / concern.limit : -1
+    }
+    const compare = (a: Server, b: Server) => {
+      switch (sortKey) {
+        case "agent":
+          return compareVersion(a.agent, b.agent)
+        case "lastSeen":
+          return a.lastSeenSec - b.lastSeenSec
+        case "concern":
+          return ratioOf(a) - ratioOf(b)
+        default:
+          return a.name.localeCompare(b.name, "zh")
+      }
+    }
+    const direction = sortDir === "asc" ? 1 : -1
+    return [...servers].sort(
+      (a, b) =>
+        Number(Boolean(a.offline)) - Number(Boolean(b.offline)) ||
+        compare(a, b) * direction,
+    )
+  }, [servers, sortKey, sortDir])
 
   const online = fleet.filter((item) => item.status !== "off").length
   const firing = alertEvents.filter((event) => event.state === "firing").length
@@ -232,6 +339,22 @@ export function OverviewPage() {
           卡片本身不接 hover、不可点：**一个静态的卡片加 hover 阴影是纯装饰**
           （§P 那轮专门扫过"每个卡片的入场动画"这类 AI 味），要可点就必须真的有去处。
         */}
+        {/*
+          KPI 卡片此前**不受 loaded 约束** —— 表格在转骨架屏时它已经在出数。
+          mock 是同步的所以看不出来，接真实接口后会出现"先闪 0 / 旧值，再跳真值"。
+          现在与表格共用一个加载门；骨架高度对齐真实卡片（83px），不会跳版。
+        */}
+        {!loaded ? (
+          <div
+            className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5"
+            aria-busy="true"
+            aria-label="加载中"
+          >
+            {Array.from({ length: 5 }, (_, index) => (
+              <Skeleton key={index} className="h-[83px]" />
+            ))}
+          </div>
+        ) : (
         <dl
           data-testid="admin-stats"
           className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5"
@@ -317,6 +440,7 @@ export function OverviewPage() {
             </div>
           ))}
         </dl>
+        )}
 
       {/*
         筛选区。三类控件底座原来各不相同、权重分不开：
@@ -410,8 +534,8 @@ export function OverviewPage() {
       </div>
 
       {!loaded ? (
-        <TableSkeleton rows={8} cols={7} />
-      ) : servers.length === 0 ? (
+        <TableSkeleton rows={8} cols={8} />
+      ) : sorted.length === 0 ? (
         <EmptyState
           icon={MagnifyingGlass}
           title="没有匹配的节点"
@@ -476,28 +600,51 @@ export function OverviewPage() {
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="h-9 px-3" />
-                <TableHead className="h-9 px-3 text-xs font-medium">节点</TableHead>
+                <SortableHead
+                  sortKey="name"
+                  active={sortKey === "name"}
+                  dir={sortDir}
+                  onSort={setSort}
+                >
+                  节点
+                </SortableHead>
                 <TableHead className="h-9 px-3 text-xs font-medium">
                   地址 / 系统
                 </TableHead>
-                <TableHead className="h-9 px-3 text-xs font-medium">agent</TableHead>
+                <SortableHead
+                  sortKey="agent"
+                  active={sortKey === "agent"}
+                  dir={sortDir}
+                  onSort={setSort}
+                >
+                  agent
+                </SortableHead>
                 {/* 维护是配置，直接在列表里开关（行内开关 = 改完立即生效） */}
                 <TableHead className="h-9 px-3 text-xs font-medium">维护</TableHead>
-                <TableHead className="h-9 px-3 text-right text-xs font-medium">
-                  最后上报
-                </TableHead>
-                {/* 表头带上口径，否则「关注」是个猜谜的词 */}
-                <TableHead
-                  className="h-9 px-3 text-xs font-medium"
-                  title="占阈值 90% 以上的那一项；都在 90% 以下时留空"
+                <SortableHead
+                  sortKey="lastSeen"
+                  active={sortKey === "lastSeen"}
+                  dir={sortDir}
+                  onSort={setSort}
                 >
-                  关注
-                </TableHead>
+                  最后上报
+                </SortableHead>
+                {/* 表头带上口径，否则「关注」是个猜谜的词 */}
+                <SortableHead
+                  sortKey="concern"
+                  active={sortKey === "concern"}
+                  dir={sortDir}
+                  onSort={setSort}
+                >
+                  <span title="占阈值 90% 以上的那一项；都在 90% 以下时留空">
+                    关注
+                  </span>
+                </SortableHead>
                 <TableHead className="h-9 px-2" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {servers.map((item) => (
+              {sorted.map((item) => (
                 <TableRow
                   key={item.id}
                   className="group/row cursor-pointer"
@@ -576,11 +723,11 @@ export function OverviewPage() {
                     {/* 离线时"多久没上报"才是要看的数 —— 用 crit 徽章顶出来 */}
                     {item.offline ? (
                       <ToneBadge tone="crit" title="超过离线判定阈值">
-                        {item.lastSeen}
+                        {formatLastSeen(item.lastSeenSec)}
                       </ToneBadge>
                     ) : (
                       <span className="num text-xs text-muted-foreground">
-                        {item.lastSeen}
+                        {formatLastSeen(item.lastSeenSec)}
                       </span>
                     )}
                   </TableCell>
@@ -625,12 +772,11 @@ export function OverviewPage() {
                             <DotsThree className="size-3.5" />
                           </Button>
                         </DropdownMenuTrigger>
+                      {/*
+                        原来第一项是「查看详情」—— 而**点整行就是查看详情**，
+                        同一个动作两个入口。删掉，菜单只留"点行做不到的事"。
+                      */}
                       <DropdownMenuContent align="end" className="w-36">
-                        <DropdownMenuItem
-                          onClick={() => setParams({ server: item.id })}
-                        >
-                          查看详情
-                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => setEditingTags(item)}
                         >

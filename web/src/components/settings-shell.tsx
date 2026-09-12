@@ -151,7 +151,7 @@ export function SettingsFooter({
     >
       <Button
         size="sm"
-        className="h-8 px-3 text-xs"
+        className="h-8 px-3 text-xs touch:h-11"
         disabled={!dirty}
         onClick={() => {
           onSave()
@@ -163,7 +163,7 @@ export function SettingsFooter({
       <Button
         variant="outline"
         size="sm"
-        className="h-8 px-3 text-xs"
+        className="h-8 px-3 text-xs touch:h-11"
         disabled={!dirty}
         onClick={onReset}
       >
