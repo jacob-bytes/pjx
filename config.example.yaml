@@ -1,0 +1,30 @@
+# pjx master 配置示例。复制为 config.yaml 后按需修改。
+# 所有字段都可以用 PJX_ 开头的环境变量覆盖。
+
+listen: 127.0.0.1:8080
+data_dir: ./data
+web_dir: ./web/dist
+
+# agent 令牌：留空则本地开发放行任意 token（生产必须配置）
+agent_tokens:
+  - change-me
+
+# 首次启动用 admin_password 引导；登录成功后自动改存 Argon2id 哈希
+admin_password: change-me
+# 留空则首次启动自动生成并持久化到 settings
+session_secret: ""
+
+retention:
+  raw_enabled: false
+  raw_keep: 24h
+  memory_keep: 1h
+  one_min_keep: 14d
+  one_hour_keep: 365d
+  task_keep: 30d
+  alert_keep: 90d
+
+telegram:
+  enabled: false
+  token: ""
+  chat_id: ""
+  topic_id: ""

@@ -15,7 +15,8 @@
   - docs/polish-round4.md 第四至三十八轮（对齐 ink）
 - 技术栈：Vite 6 + React 19 + TypeScript + Tailwind v4 + shadcn/ui +
   Inter Variable + Phosphor Icons
-- 前端目前是静态 mock 数据，1s 实时模拟；master / agent（Go）尚未开始
+- 前端目前是静态 mock 数据，1s 实时模拟
+- Go 后端骨架已搭起：master（HTTP / SSE / agent WebSocket / SQLite）+ agent（/proc 采集 / 探活 / 重连），可本地联调
 
 ## 技术决策（已定）
 
@@ -57,6 +58,11 @@
     │   ├── polish-round3.md     # 第三轮记录
     │   ├── polish-round4.md     # 第四至三十八轮记录（对齐 ink）
     │   ├── reference/           # 上游 ink 预览图与 token 摘录
+    │   ├── protocol.md          # agent 线协议
+    │   ├── metrics.md           # 指标分层与查询
+    │   ├── tasks.md            # 探活任务与调度
+    │   ├── alerts.md           # 告警与通知
+    │   ├── security.md         # 安全与设置持久化
     │   ├── ui-spec.md           # 设计系统规范
     │   └── public-page.md       # 公网页规范
     └── web/
@@ -101,6 +107,62 @@
 > `find ~/.npm -user root` 结果是 0 个文件，目录本来就归当前用户所有。
 > 真正的原因是在受限沙箱里执行 npm 时写不了工作区外的路径 ——
 > 那是执行环境的限制，不是机器权限问题，更不该让使用者去跑 sudo。
+
+## Go 后端（骨架）
+
+目录：
+
+    cmd/master/              master 入口
+    cmd/agent/               agent 入口
+    internal/protocol/       JSON-RPC 2.0 线协议（见 docs/protocol.md）
+    internal/config/         默认值 / YAML / PJX_ 环境变量
+    internal/metrics/        内存环形缓冲 + 1m/1h 聚合 + 保留清理 + 分层查询
+    internal/store/          SQLite WAL + agents / metric_1m / metric_1h / settings
+    internal/master/         HTTP 路由、agent hub、SSE、鉴权、静态服务
+    internal/agent/          采集（Linux /proc，非 Linux 用 runtime 兜底）、探活、重连
+    internal/scheduler/      探活任务调度、run_id、重试与结果去重
+    internal/alerts/         告警规则、firing/resolved 状态机、通知触发
+    internal/authn/          Argon2id 密码哈希、agent 令牌生成与校验
+    internal/notify/         Notifier 接口 + Telegram（Webhook 预留）
+
+编译与运行：
+
+    go mod tidy
+    go build -o pjx-master ./cmd/master
+    go build -o pjx-agent ./cmd/agent
+
+    ./pjx-master -config config.example.yaml -listen 127.0.0.1:8080 -web-dir web/dist
+    ./pjx-agent  -master ws://127.0.0.1:8080/api/agent/ws -name node-1 -interval 1s
+    go test ./...
+
+首次启动建议显式设置管理员口令（登录成功后自动改为 Argon2id 哈希存库）：
+
+    PJX_ADMIN_PASSWORD=change-me ./pjx-master -config config.example.yaml
+
+agent 令牌在后台「接入与令牌」页创建，明文只显示一次。
+
+已实现：
+
+- GET /api/health
+- GET /api/public/overview（脱敏）
+- GET /api/events（SSE，每秒一条 tick，与节点数无关）
+- GET /api/public/series（历史序列，自动选层 + 降采样）
+- GET /api/public/probes（探测任务公开汇总）
+- GET/POST /api/admin/tasks、GET/PUT/DELETE /api/admin/tasks/{id}（需登录）
+- 任务调度：interval 下发、标签 / 指定节点、超时重试、run_id 去重
+- GET/POST /api/admin/alert-rules、GET/PUT/DELETE /api/admin/alert-rules/{id}（需登录）
+- GET /api/admin/alert-events、POST /api/admin/notify/test（需登录）
+- 告警：metric / offline / probe 规则、for 时长、冷却、重启恢复 firing
+- Telegram：HTML、全局限速、429 retry_after 退避（Webhook 预留）
+- GET/POST /api/admin/tokens、DELETE /api/admin/tokens/{id}（哈希入库、软撤销）
+- POST /api/admin/password（Argon2id）、GET/PUT /api/admin/settings（持久化）
+- 安全：登录限流、session secret 持久化、agent 令牌零明文、匿名接入自动关闭
+- GET /api/agent/ws（Bearer token，JSON-RPC hello / report / taskResult）
+- POST /api/admin/login / logout、GET /api/admin/session（HMAC 签名 cookie）
+- GET /api/admin/state / agents（需登录）
+- 静态服务：/ 与 /admin/ 双 SPA，含 /admin/* 深链兜底；找不到 web/dist 时显示占位页
+
+尚未实现：web/dist 的 go:embed、Raw 15s 落盘层、离线任务 queue + TTL、按 agent 的任务结果序列、Webhook 渠道实装、TOTP 二次验证。
 
 ## 下一步
 

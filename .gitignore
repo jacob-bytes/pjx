@@ -54,3 +54,9 @@ Thumbs.db
 # 临时脚本（用完即删，别混进仓库）
 tmp-*
 web/tmp-*
+
+# Go 本地构建产物（默认输出在当前目录）
+/pjx-master
+/pjx-agent
+/cmd/master/master
+/cmd/agent/agent
