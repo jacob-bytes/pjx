@@ -2682,3 +2682,84 @@ chunk 之间发生了重新划分（共享块 −2.9、入口块 +2.6），**净
 - **§AS 行为断言 27/27**、**§AT 行为断言 42/42**（两个临时脚本，跑完删除）
 - §AT 断言里抓出**一个真 bug**：统计条「探测任务」把数组本身插进了模板字符串，
   渲染成 `[object Object],…` —— 漏了 `.length`。纯静态检查看不出来，是断言发现的。
+
+---
+
+## AU-a. 第四十五轮（事故修复）：带着旧配置回后台会白屏
+
+### 现象
+
+需求方截图：`/admin/` **整页白屏**，Console 里
+`Uncaught TypeError: Cannot read properties of undefined (reading 'includes')`
+，栈指向 `overview.tsx:153` 的 `probes.filter(...)`。
+
+### 根因
+
+```ts
+const aliveProbes = probes.filter(
+  (probe) => !settings.probesRemoved.includes(probe.id),   // ← undefined.includes
+)
+```
+
+`settings.probesRemoved` 是 `undefined`。为什么：
+
+`usePersistentState` 的实现是**直接把解析后的 localStorage 值当状态返回**：
+
+```ts
+if (raw !== null) return JSON.parse(raw) as T     // 没有与默认值合并
+```
+
+而 §AS 给 `Settings` 新增了 5 个字段（`nodes` / `probeEnabled` / `probesRemoved` /
+`probesCreated` / `ruleEnabled`）。**浏览器里存着 §AR 时代配置的用户，读到的这 5 个
+全是 `undefined`** —— 于是第一个 `.includes` 就抛异常，React 整棵树卸载，白屏。
+
+受影响的不止总览：`settings.nodes[id]`、`settings.probeEnabled[id]`、
+`settings.ruleEnabled[id]`、`settings.tokens.map`、`settings.telegram`、
+`settings.retention` 全都会炸 —— 也就是**后台七个页面全白**。
+
+### 复现取证（不是猜的）
+
+写了脚本对比"全新访问"与"带旧配置访问"：
+
+| | 表格渲染 | 页面文本长度 | 报错 |
+| --- | --- | --- | --- |
+| 全新访问（localStorage 为空）| 1 | 1077 | 0 |
+| §AR 时代的旧配置 | **0** | **0** | `Cannot read properties of undefined (reading 'includes')` |
+
+### 修法：在 store 入口做一次配置迁移
+
+新增 `normalizeSettings(raw: unknown): Settings`（`lib/settings.ts`），
+把任意值补齐成完整对象：字符串/布尔逐字段校验、数组校验、嵌套对象深合并。
+`usePersistentState` 增加可选的 `normalize` 参数，`SettingsProvider` 传进去。
+
+**为什么放在入口而不是 20 个使用处各写 `?? []`**：单一位置、以后再加字段自动兼容，
+顺带把"手工改坏 localStorage"一起兜住。归一化后的值在挂载时会被写回，旧数据自愈。
+
+### 为什么之前 21 条测试一条都没抓到
+
+**所有自动化测试都用全新 context，localStorage 是空的。**
+我验的是"第一次来"，从没验过"带着旧状态回来" —— 而这恰恰是真实用户的常态
+（他们昨天打开过、今天再打开）。这是本轮最该记下的一条：
+
+> 状态持久化的功能，"冷启动"与"热启动"是两条不同的代码路径。
+> 只测冷启动等于没测迁移。
+
+现在补了一条回归测试（`后台 · 旧版本配置（缺字段）不会白屏`）：往 localStorage 里
+塞一份**只有 §AR 字段**的配置，然后断言总览表格可见、统计条含「探测任务」、
+通知页与保留页能打开、**且旧值 `旧站点` 被保留而不是被默认值覆盖**。
+
+### 加固实测（7 种畸形旧状态 × 7 个后台页面）
+
+| 存进去的值 | 结果 |
+| --- | --- |
+| localStorage 为空 | 0 报错，7 页全渲染 |
+| §AR 旧配置（缺 5 字段）| 0 报错（且旧值保留）|
+| `{}`（空对象）| 0 报错 |
+| 字段类型全错（`siteName: 5`、`telegram: "x"`、`tokens: "no"`、`probesRemoved: 1`…）| 0 报错 |
+| JSON 是数组 `[1,2,3]` | 0 报错 |
+| JSON 是字符串 `"hello"` | 0 报错 |
+| 完全坏掉的 JSON `not-json-at-all` | 0 报错（`JSON.parse` 抛错被捕获）|
+
+### 验证
+
+`npm run verify` 全绿；视觉回归 **21 张**（新增 1 条迁移回归，非快照断言），2 连跑稳定。

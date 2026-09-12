@@ -9,6 +9,7 @@ import { usePersistentState } from "@/lib/persist"
 import {
   DEFAULT_SETTINGS,
   SETTINGS_KEY,
+  normalizeSettings,
   type CreatedProbe,
   type NodeConfig,
   type Settings,
@@ -38,6 +39,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = usePersistentState<Settings>(
     SETTINGS_KEY,
     DEFAULT_SETTINGS,
+    /*
+      必须归一化：浏览器里可能存着旧版本的配置（少几个后来才加的字段）。
+      直接拿来用，新字段就是 undefined，读到就抛 —— 表现是整个后台白屏。
+    */
+    normalizeSettings,
   )
 
   const save = useCallback(

@@ -151,6 +151,71 @@ export function today(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
 }
 
+/* ------------------------------------------------------------------ 配置迁移 */
+
+/*
+  把 localStorage 里读到的任意值**补齐成完整的 Settings**。
+
+  为什么必须有这一步：`usePersistentState` 原来直接返回解析后的对象，
+  于是"浏览器里存着旧版本的配置"就会缺掉后来新增的字段。
+  §AS 给 Settings 加了 nodes / probeEnabled / probesRemoved / probesCreated /
+  ruleEnabled 五个字段，老用户读到的这几个全是 undefined ——
+  `settings.probesRemoved.includes(...)` 直接抛 TypeError，**整个后台白屏**。
+
+  （而我之前所有自动化测试都用全新 context，localStorage 是空的，
+  所以一条都没走到这条路 —— 只验了"第一次来"，没验"带着旧状态回来"。）
+
+  在 store 的入口做一次归一化，而不是在二十个使用处各写一个 `?? []`：
+  单一位置、以后再加字段也自动兼容。顺便把手工改坏 localStorage 的情况一起兜住。
+*/
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+
+const asString = (value: unknown, fallback: string) =>
+  typeof value === "string" ? value : fallback
+
+const asBool = (value: unknown, fallback: boolean) =>
+  typeof value === "boolean" ? value : fallback
+
+const asArray = <T>(value: unknown, fallback: T[]) =>
+  Array.isArray(value) ? (value as T[]) : fallback
+
+export function normalizeSettings(raw: unknown): Settings {
+  const stored = isRecord(raw) ? raw : {}
+  const telegram = isRecord(stored.telegram) ? stored.telegram : {}
+  const retention = isRecord(stored.retention) ? stored.retention : {}
+  const d = DEFAULT_SETTINGS
+
+  return {
+    siteName: asString(stored.siteName, d.siteName),
+    timezone: asString(stored.timezone, d.timezone),
+    telegram: {
+      enabled: asBool(telegram.enabled, d.telegram.enabled),
+      botToken: asString(telegram.botToken, d.telegram.botToken),
+      chatId: asString(telegram.chatId, d.telegram.chatId),
+      topicId: asString(telegram.topicId, d.telegram.topicId),
+    },
+    retention: {
+      memoryKeep: asString(retention.memoryKeep, d.retention.memoryKeep),
+      rawEnabled: asBool(retention.rawEnabled, d.retention.rawEnabled),
+      rawKeep: asString(retention.rawKeep, d.retention.rawKeep),
+      m1Keep: asString(retention.m1Keep, d.retention.m1Keep),
+      h1Keep: asString(retention.h1Keep, d.retention.h1Keep),
+    },
+    tokens: asArray<AgentToken>(stored.tokens, d.tokens),
+    nodes: (isRecord(stored.nodes) ? stored.nodes : {}) as Settings["nodes"],
+    probeEnabled: (isRecord(stored.probeEnabled)
+      ? stored.probeEnabled
+      : {}) as Settings["probeEnabled"],
+    probesRemoved: asArray<string>(stored.probesRemoved, d.probesRemoved),
+    probesCreated: asArray<CreatedProbe>(stored.probesCreated, d.probesCreated),
+    ruleEnabled: (isRecord(stored.ruleEnabled)
+      ? stored.ruleEnabled
+      : {}) as Settings["ruleEnabled"],
+  }
+}
+
 /** Telegram Bot API 的 token 形如 `123456789:AA…`（冒号后 35 位左右） */
 export const TELEGRAM_TOKEN_RE = /^\d{6,}:[A-Za-z0-9_-]{30,}$/
 

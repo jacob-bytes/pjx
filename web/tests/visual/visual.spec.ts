@@ -64,6 +64,60 @@ test.describe("后台", () => {
     await expect(page.getByTestId("admin-table")).toBeVisible()
   })
 
+  /*
+    配置迁移回归。
+
+    这一条是补一次真实事故：`usePersistentState` 原来直接返回解析后的 localStorage 值，
+    所以**带着旧版本配置回到后台会白屏** —— §AS 给 Settings 加了 5 个字段，
+    老用户读到的是 undefined，`settings.probesRemoved.includes(...)` 直接抛 TypeError。
+
+    当时所有测试都用全新 context（localStorage 为空），一条都没走到这条路：
+    只验了"第一次来"，没验"带着旧状态回来"。
+  */
+  test("后台 · 旧版本配置（缺字段）不会白屏", async ({ page }) => {
+    await page.addInitScript(() => {
+      // 只写 §AR 时代的字段，故意缺 nodes / probeEnabled / probesRemoved 等
+      localStorage.setItem(
+        "pjx-settings",
+        JSON.stringify({
+          siteName: "旧站点",
+          timezone: "UTC",
+          telegram: { enabled: true, botToken: "x", chatId: "1", topicId: "" },
+          retention: {
+            memoryKeep: "1h",
+            rawEnabled: false,
+            rawKeep: "24h",
+            m1Keep: "14d",
+            h1Keep: "365d",
+          },
+          tokens: [],
+        }),
+      )
+    })
+    await makeDeterministic(page)
+
+    // 总览要能渲染出来（白屏时这里会超时）
+    await page.goto("/admin/")
+    await waitForData(page)
+    await expect(page.getByTestId("admin-table")).toBeVisible()
+    // 缺失字段补默认：统计条里那几项依赖 probesRemoved / ruleEnabled
+    await expect(page.getByTestId("admin-stats")).toContainText("探测任务")
+
+    // 四个设置子页也要能打开（telegram / retention 是分别归一化的）
+    await page.goto("/admin/settings/notifications")
+    await waitForData(page)
+    await expect(page.getByLabel("启用 Telegram 通知")).toBeVisible()
+
+    await page.goto("/admin/settings/retention")
+    await waitForData(page)
+    await expect(page.getByTestId("retention-snapshot")).toBeVisible()
+
+    // 归一化后旧值要保留、而不是被默认值覆盖
+    await page.goto("/admin/settings/general")
+    await waitForData(page)
+    await expect(page.locator("#site-name")).toHaveValue("旧站点")
+  })
+
   test("总览 · 浅色", async ({ page }) => {
     await makeDeterministic(page)
     await page.goto("/admin/")
