@@ -329,7 +329,9 @@ export function OverviewPage() {
   const firing = firingEvents.length
   const firingCrit = firingEvents.filter((event) => event.level === "crit").length
   const staleAgents = fleet.filter(
-    (item) => compareVersion(item.agent, LATEST_AGENT) < 0,
+    // 离线机器不计入"agent 落后"：它已经在「在线」那张卡里算过一次了，
+    // 而离线机器的 agent 版本本来就无从升级（§AF：同一件事只报一次）
+    (item) => !item.offline && compareVersion(item.agent, LATEST_AGENT) < 0,
   ).length
   const aliveProbes = probes.filter(
     (probe) => !settings.probesRemoved.includes(probe.id),

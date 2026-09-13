@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react"
 import { clamp } from "@/lib/format"
+import { NODES, type Status } from "@/lib/nodes"
 
 /**
  * 演示用的内存数据源。
@@ -10,7 +11,10 @@ import { clamp } from "@/lib/format"
  * 组件仍然只通过 useFleetTick() 订阅，所以换成真实数据流时上层不用动。
  */
 
-export type Status = "ok" | "warn" | "crit" | "off"
+export type { Status }
+
+/** 当前最新 agent 版本。NODES 里没显式写 agent 的都跑在它上面 */
+const LATEST_AGENT = "0.3.1"
 
 export interface Server {
   id: string
@@ -118,225 +122,46 @@ function server(
   }
 }
 
-export const fleet: Server[] = [
+/**
+ * 后台的机队 = 规范节点清单 + 运维字段。
+ *
+ * 投影而不是另抄一份：id / 名称 / 指标 / 状态都来自 `NODES`，
+ * 所以后台点进某台机器可以直接链到前台同一个 id 的公开页。
+ */
+export const fleet: Server[] = NODES.map((node) =>
   server({
-    id: "hk-01",
-    name: "hk-01",
-    tags: ["香港", "生产"],
-    ip: "203.0.113.21",
-    region: "香港",
-    os: "Debian 12",
-    agent: "0.3.1",
-    uptime: "86d 4h",
-    cpu: 23.4,
-    mem: 41.2,
-    disk: 52,
-    rx: 1.24,
-    tx: 0.42,
-    load: 0.8,
-    status: "ok",
-    lastSeenSec: 0.6,
+    id: node.id,
+    name: node.name,
+    // 后台标签 = 地区 + 用途，从规范数据派生（前台用的是服务商关键词）
+    tags: [node.region, node.env],
+    ip: node.ip,
+    region: node.region,
+    os: node.os,
+    agent: node.agent ?? LATEST_AGENT,
+    uptime: node.uptime,
+    cpu: node.cpu,
+    mem: node.mem,
+    disk: node.disk,
+    rx: node.rx,
+    tx: node.tx,
+    load: node.load,
+    status: node.status ?? "ok",
+    offline: node.status === "off",
+    // 最后上报：离线的那台是"38 分钟前"，其余在 0.5~0.7s 之间（按 id 稳定取值）
+    lastSeenSec:
+      node.status === "off" ? 2280 : 0.5 + (hashId(node.id) % 3) / 10,
   }),
-  server({
-    id: "hk-02",
-    name: "hk-02",
-    tags: ["香港", "生产"],
-    ip: "203.0.113.22",
-    region: "香港",
-    os: "Debian 12",
-    agent: "0.3.1",
-    uptime: "52d 11h",
-    cpu: 34.8,
-    mem: 58.1,
-    disk: 87,
-    rx: 2.1,
-    tx: 0.96,
-    load: 1.4,
-    status: "warn",
-    lastSeenSec: 0.7,
-  }),
-  server({
-    id: "tokyo-01",
-    name: "tokyo-01",
-    tags: ["东京", "生产"],
-    ip: "198.51.100.11",
-    region: "东京",
-    os: "Ubuntu 24.04",
-    agent: "0.3.1",
-    uptime: "128d 2h",
-    cpu: 18.2,
-    mem: 36.4,
-    disk: 44,
-    rx: 0.86,
-    tx: 0.31,
-    load: 0.5,
-    status: "ok",
-    lastSeenSec: 0.5,
-  }),
-  server({
-    id: "tokyo-02",
-    name: "tokyo-02",
-    tags: ["东京", "备用"],
-    ip: "198.51.100.12",
-    region: "东京",
-    os: "Ubuntu 24.04",
-    agent: "0.3.0",
-    uptime: "9d 6h",
-    cpu: 8.6,
-    mem: 21.8,
-    disk: 31,
-    rx: 0.12,
-    tx: 0.05,
-    load: 0.1,
-    status: "ok",
-    lastSeenSec: 0.6,
-  }),
-  server({
-    id: "singapore-01",
-    name: "singapore-01",
-    tags: ["新加坡", "生产"],
-    ip: "192.0.2.31",
-    region: "新加坡",
-    os: "AlmaLinux 9",
-    agent: "0.3.1",
-    uptime: "74d 19h",
-    cpu: 41.6,
-    mem: 63.2,
-    disk: 55,
-    rx: 3.42,
-    tx: 1.18,
-    load: 2.1,
-    status: "ok",
-    lastSeenSec: 0.6,
-  }),
-  server({
-    id: "frankfurt-01",
-    name: "frankfurt-01",
-    tags: ["法兰克福", "生产"],
-    ip: "192.0.2.77",
-    region: "法兰克福",
-    os: "Debian 12",
-    agent: "0.3.1",
-    uptime: "61d 3h",
-    cpu: 27.9,
-    mem: 49.5,
-    disk: 61,
-    rx: 1.66,
-    tx: 0.74,
-    load: 1.2,
-    status: "ok",
-    lastSeenSec: 0.7,
-  }),
-  server({
-    id: "lax-01",
-    name: "lax-01",
-    tags: ["洛杉矶", "生产"],
-    ip: "198.51.100.88",
-    region: "洛杉矶",
-    os: "CentOS 9",
-    agent: "0.2.9",
-    uptime: "—",
-    cpu: 0,
-    mem: 0,
-    disk: 0,
-    rx: 0,
-    tx: 0,
-    load: 0,
-    status: "off",
-    offline: true,
-    lastSeenSec: 2280,
-  }),
-  server({
-    id: "hz-01",
-    name: "aliyun-hz-01",
-    tags: ["杭州", "生产"],
-    ip: "203.0.113.90",
-    region: "杭州",
-    os: "Alibaba Cloud Linux 3",
-    agent: "0.3.1",
-    uptime: "203d 8h",
-    cpu: 52.3,
-    mem: 71.8,
-    disk: 68,
-    rx: 4.21,
-    tx: 2.06,
-    load: 3.4,
-    status: "ok",
-    lastSeenSec: 0.5,
-  }),
-  server({
-    id: "sh-01",
-    name: "tencent-sh-01",
-    tags: ["上海", "生产"],
-    ip: "203.0.113.91",
-    region: "上海",
-    os: "OpenCloudOS 9",
-    agent: "0.3.1",
-    uptime: "44d 12h",
-    cpu: 44.1,
-    mem: 66.3,
-    disk: 71,
-    rx: 2.88,
-    tx: 1.31,
-    load: 2.7,
-    status: "ok",
-    lastSeenSec: 0.6,
-  }),
-  server({
-    id: "gz-01",
-    name: "gz-01",
-    tags: ["广州", "备用"],
-    ip: "203.0.113.92",
-    region: "广州",
-    os: "Debian 12",
-    agent: "0.3.0",
-    uptime: "12d 1h",
-    cpu: 7.8,
-    mem: 18.6,
-    disk: 27,
-    rx: 0.09,
-    tx: 0.04,
-    load: 0.1,
-    status: "ok",
-    lastSeenSec: 0.6,
-  }),
-  server({
-    id: "sin-aws-01",
-    name: "aws-sin-01",
-    tags: ["新加坡", "生产"],
-    ip: "192.0.2.140",
-    region: "新加坡",
-    os: "Amazon Linux 2023",
-    agent: "0.3.1",
-    uptime: "97d 22h",
-    cpu: 31.4,
-    mem: 52.7,
-    disk: 59,
-    rx: 1.92,
-    tx: 0.88,
-    load: 1.1,
-    status: "ok",
-    lastSeenSec: 0.5,
-  }),
-  server({
-    id: "nas-01",
-    name: "backup-nas",
-    tags: ["家里", "备用"],
-    ip: "192.168.1.10",
-    region: "本机",
-    os: "Debian 12",
-    agent: "0.3.1",
-    uptime: "31d 7h",
-    cpu: 3.2,
-    mem: 12.4,
-    disk: 92,
-    rx: 0.31,
-    tx: 0.62,
-    load: 0.2,
-    status: "warn",
-    lastSeenSec: 0.6,
-  }),
-]
+)
+
+/** 稳定的字符串散列，用来给 mock 的"随机"取值（同一 id 每次同值） */
+function hashId(value: string) {
+  let hash = 2166136261
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return hash >>> 0
+}
 
 export const probes: Probe[] = [
   {
@@ -424,7 +249,7 @@ export const alertEvents: AlertEvent[] = [
     id: "e-01",
     time: "14:02:11",
     level: "crit",
-    object: "lax-01",
+    object: "dmit-lax-01",
     rule: "节点离线 > 1m",
     state: "firing",
     duration: "38m",
@@ -433,7 +258,7 @@ export const alertEvents: AlertEvent[] = [
     id: "e-02",
     time: "13:47:30",
     level: "warn",
-    object: "hk-02",
+    object: "ali-hk-01",
     rule: "磁盘使用率 > 85% 持续 10m",
     state: "firing",
     duration: "52m",
@@ -460,7 +285,7 @@ export const alertEvents: AlertEvent[] = [
     id: "e-05",
     time: "昨天 22:41",
     level: "warn",
-    object: "aliyun-hz-01",
+    object: "sg-web-01",
     rule: "CPU > 90% 持续 5m",
     state: "resolved",
     duration: "11m",

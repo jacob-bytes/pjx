@@ -200,7 +200,7 @@ export function AccessPage() {
                   value={name}
                   maxLength={32}
                   onChange={(event) => setName(event.target.value)}
-                  placeholder="例如：hk-01 生产"
+                  placeholder="例如：dmit-hk-01 生产"
                   className="h-8 text-xs touch:h-11"
                 />
                 <p className="text-2xs text-subtle">

@@ -159,11 +159,12 @@ export function ServerSheet({ server }: { server: Server }) {
                 </DropdownMenuItem>
                 {/*
                   曲线与心跳在前台，这里给一条明路。
-                  只能落到前台首页，拼不出对应节点的深链 —— 两套 mock 的节点 id 不同
-                  （后台 hk-01 / 前台 dmit-hk-01）。统一数据源后可改成 ?node=<id>。
+                  §BB 统一数据源之前这里只能落到首页 —— 两套 mock 的节点 id 不同
+                  （后台 hk-01 / 前台 dmit-hk-01）。现在前后台共用 `NODES`，
+                  所以能直接打开**这台机器**的公开页。
                 */}
                 <DropdownMenuItem asChild>
-                  <a href="/">
+                  <a href={`/?node=${server.id}`} target="_blank" rel="noreferrer">
                     <ArrowSquareOut className="size-3.5" />
                     查看前台
                   </a>

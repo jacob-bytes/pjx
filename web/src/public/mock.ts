@@ -1,7 +1,10 @@
 import { useSyncExternalStore } from "react"
 import { clamp } from "@/lib/format"
+import { NODES, type NodeSeed, type Status } from "@/lib/nodes"
 
-export type Status = "ok" | "warn" | "crit" | "off"
+// Status / NodeSeed 的唯一来源是 @/lib/nodes；这里转出去，
+// 让既有 `import type { Status } from "@/public/mock"` 不用改。
+export type { NodeSeed, Status }
 
 export interface IspLatency {
   id: string
@@ -162,36 +165,6 @@ export interface PublicNode {
   uptime: string
 }
 
-interface NodeSeed {
-  id: string
-  name: string
-  country: string
-  category: string
-  tags: string[]
-  cpu: number
-  load: number
-  mem: number
-  memTotal: number
-  disk: number
-  diskTotal: number
-  trafficUsed: number
-  trafficTotal: number
-  rx: number
-  tx: number
-  latency: number
-  loss: number
-  isp: [number, number, number]
-  expireDays: number
-  billing: string
-  uptime: string
-  status?: Status
-  favorite?: boolean
-  upTotal?: number
-  downTotal?: number
-  /** 覆盖自动推导的设备信息 */
-  os?: string
-  cpuModel?: string
-}
 
 function seedSeries(
   length: number,
@@ -480,7 +453,19 @@ function makeUptimeDays(seed: number): UptimeDay[] {
 }
 
 function makeNode(seed: NodeSeed): PublicNode {
-  const { isp, status, favorite, os, cpuModel, ...rest } = seed
+  // region / env / ip / agent 是后台专有字段，别渗进前台的节点对象
+  const {
+    isp,
+    status,
+    favorite,
+    os,
+    cpuModel,
+    region: _region,
+    env: _env,
+    ip: _ip,
+    agent: _agent,
+    ...rest
+  } = seed
   const statusValue: Status = status ?? "ok"
   const hash = hashString(seed.id)
   const trafficRatio =
@@ -552,20 +537,7 @@ function makeNode(seed: NodeSeed): PublicNode {
   }
 }
 
-export const nodes: PublicNode[] = [
-  makeNode({ id: "dmit-hk-01", name: "DMIT-HK.T1", country: "HK", category: "入口集群", tags: ["dmit", "入口", "caddy"], cpu: 23.4, load: 0.62, mem: 41.2, memTotal: 2, disk: 52, diskTotal: 20, trafficUsed: 72.6, trafficTotal: 1, rx: 1.24, tx: 0.42, latency: 42, loss: 0.1, isp: [40, 45, 42], expireDays: 86, billing: "¥45/月", uptime: "43d", favorite: true }),
-  makeNode({ id: "dmit-lax-01", name: "DMIT-LAX.AN4", country: "US", category: "落地服务器", tags: ["dmit", "落地", "三网"], cpu: 0.3, load: 0.01, mem: 35.1, memTotal: 1, disk: 43.8, diskTotal: 20, trafficUsed: 0.2, trafficTotal: 1, rx: 0.15, tx: 1.2, latency: 162, loss: 0, isp: [129, 167, 179], expireDays: 57, billing: "$39.9/年", uptime: "43d" }),
-  makeNode({ id: "tencent-sv-01", name: "腾讯云-硅谷", country: "US", category: "落地服务器", tags: ["腾讯云", "ppanel"], cpu: 0.7, load: 0.03, mem: 17, memTotal: 1, disk: 41.1, diskTotal: 20, trafficUsed: 60, trafficTotal: 1, rx: 0.01, tx: 0.07, latency: 161, loss: 0, isp: [129, 167, 178], expireDays: 34, billing: "¥68/月", uptime: "42d" }),
-  makeNode({ id: "tencent-gz-01", name: "腾讯云-广州", country: "CN", category: "建站", tags: ["腾讯云", "ppanel", "建站"], cpu: 0.8, load: 0.02, mem: 24.9, memTotal: 2, disk: 13.4, diskTotal: 40, trafficUsed: 212, trafficTotal: 2, rx: 0.02, tx: 0.01, latency: 8, loss: 0, isp: [7, 9, 8], expireDays: 145, billing: "¥340/年", uptime: "54d", favorite: true }),
-  makeNode({ id: "ucloud-la-01", name: "ucloud-la", country: "US", category: "落地服务器", tags: ["ucloud", "落地"], cpu: 2.7, load: 0.08, mem: 45.8, memTotal: 2, disk: 27.4, diskTotal: 40, trafficUsed: 168, trafficTotal: 2, rx: 0.21, tx: 1.6, latency: 152, loss: 0.1, isp: [135, 170, 180], expireDays: 145, billing: "$5.9/月", uptime: "131d" }),
-  makeNode({ id: "volc-gz-01", name: "火山云-广州", country: "CN", category: "建站", tags: ["火山云", "建站"], cpu: 3.1, load: 0.1, mem: 38.4, memTotal: 4, disk: 20.6, diskTotal: 40, trafficUsed: 320, trafficTotal: 3, rx: 0.42, tx: 0.33, latency: 9, loss: 0, isp: [8, 10, 9], expireDays: 342, billing: "¥340/年", uptime: "117d" }),
-  makeNode({ id: "volc-gz-02", name: "火山云-广州-2", country: "CN", category: "ix互联", tags: ["火山云", "ix"], cpu: 12.4, load: 0.3, mem: 51.9, memTotal: 4, disk: 32.7, diskTotal: 80, trafficUsed: 96, trafficTotal: 3, rx: 0.86, tx: 0.31, latency: 12, loss: 0.1, isp: [11, 14, 12], expireDays: 118, billing: "¥340/年", uptime: "89d" }),
-  makeNode({ id: "ali-hk-01", name: "阿里云-香港", country: "HK", category: "建站", tags: ["阿里云", "建站", "caddy"], cpu: 41.6, load: 1.2, mem: 63.2, memTotal: 4, disk: 55, diskTotal: 80, trafficUsed: 980, trafficTotal: 3, rx: 2.88, tx: 1.31, latency: 36, loss: 0.2, isp: [34, 39, 37], expireDays: 210, billing: "¥99/月", uptime: "203d" }),
-  makeNode({ id: "vultr-tokyo-01", name: "vultr-东京", country: "JP", category: "落地服务器", tags: ["vultr", "落地", "软银"], cpu: 18.2, load: 0.42, mem: 36.4, memTotal: 2, disk: 44, diskTotal: 40, trafficUsed: 216, trafficTotal: 2, rx: 0.86, tx: 0.31, latency: 88, loss: 0.2, isp: [85, 92, 89], expireDays: 121, billing: "$5.9/月", uptime: "121d" }),
-  makeNode({ id: "backup-nas", name: "backup-nas", country: "CN", category: "落地服务器", tags: ["家里", "备份"], cpu: 3.2, load: 0.05, mem: 12.4, memTotal: 8, disk: 92, diskTotal: 100, trafficUsed: 28, trafficTotal: 4, rx: 0.31, tx: 0.62, latency: 18, loss: 0, isp: [17, 20, 18], expireDays: 999, billing: "自建", uptime: "31d", status: "warn" }),
-  makeNode({ id: "sg-web-01", name: "sg-web-01", country: "SG", category: "建站", tags: ["腾讯云", "ppanel", "建站"], cpu: 29.8, load: 0.9, mem: 52.3, memTotal: 2, disk: 61, diskTotal: 40, trafficUsed: 138, trafficTotal: 2, rx: 2.1, tx: 0.96, latency: 92, loss: 0.2, isp: [90, 96, 93], expireDays: 240, billing: "¥138/月", uptime: "61d", favorite: true }),
-  makeNode({ id: "sg-entry-01", name: "sg-entry-01", country: "SG", category: "入口集群", tags: ["腾讯云", "入口"], cpu: 22.1, load: 0.6, mem: 44.5, memTotal: 2, disk: 37, diskTotal: 40, trafficUsed: 58, trafficTotal: 2, rx: 1.66, tx: 0.74, latency: 95, loss: 0.1, isp: [92, 99, 96], expireDays: 180, billing: "¥138/月", uptime: "77d" }),
-]
+export const nodes: PublicNode[] = NODES.map(makeNode)
 
 export const rateSeries: number[] = []
 for (let index = 0; index < 60; index++) {
@@ -629,6 +601,14 @@ function tick() {
   if (paused) return
   updatedAt = Date.now()
   for (const node of nodes) {
+    /*
+      离线节点不上报，所以既不推指标也不重算状态。
+
+      原来这里对**所有**节点无条件重算 status，于是种子数据里写成 `off` 的机器
+      在第一次 tick 之后就被"复活"成 ok —— 前台因此永远显示不出离线节点
+      （§BB 统一两套 mock 时才发现：后台说某台离线，前台说它正常）。
+    */
+    if (node.status === "off") continue
     node.cpu = clamp(node.cpu + (Math.random() - 0.5) * 2, 0.1, 97)
     node.load = clamp(node.load + (Math.random() - 0.5) * 0.06, 0, 32)
     node.mem = clamp(node.mem + (Math.random() - 0.5) * 1, 2, 96)

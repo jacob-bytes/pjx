@@ -189,7 +189,7 @@ test.describe("后台", () => {
 
   test("节点详情 Sheet · 浅色", async ({ page }) => {
     await makeDeterministic(page)
-    await page.goto("/admin/?server=hk-01")
+    await page.goto("/admin/?server=dmit-hk-01")
     await waitForData(page)
     await expect(page).toHaveScreenshot("admin-sheet-light.png")
   })
