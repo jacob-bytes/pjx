@@ -471,7 +471,13 @@ export function OverviewPage() {
         ) : (
         <dl
           data-testid="admin-stats"
-          className="grid shrink-0 grid-cols-2 gap-2.5 sm:grid-cols-4 xl:grid-cols-[minmax(0,2.15fr)_repeat(4,minmax(0,1fr))]"
+          /*
+            items-start：卡片**贴合自己的内容**，不互相拉伸。
+            拉伸过一次才知道代价 —— 主卡因为多一条 30 天条和「需要处理」而更高，
+            旁边 4 张 tile 被拉到同样高度，实测每张 170px 里只有 44.6px 是内容，
+            59% 是空白，单个「3」飘在中间。
+          */
+          className="grid shrink-0 grid-cols-2 items-start gap-2.5 sm:grid-cols-4 xl:grid-cols-[minmax(0,2.15fr)_repeat(4,minmax(0,1fr))]"
         >
           {/*
             v2：从"5 张完全等价的卡"改成"1 个状态主卡 + 4 个紧凑指标"。
@@ -509,37 +515,24 @@ export function OverviewPage() {
                 </span>
               </div>
               {/*
-                机队 30 天：整条只给一个汇总结论（读屏与 title），
-                逐格不做交互元素 —— 12 行才需要那样，这里一张卡不需要。
+                机队 30 天：日期 / 条 / 可用率**并成一行**。
+                原来分两行（条一行、轴一行）把主卡撑到比 tile 高 30px，
+                卡片就只能互相拉伸 —— 单看一张 tile，"3" 上下各空 100px。
+                整条只给一个汇总结论（读屏与 title），逐格不做交互元素。
               */}
-              <UptimeStrip
-                days={fleetDays}
-                label="机队"
-                segmentClassName="h-4"
-              />
-              {/* 数值以文字可见（skill 的可视化规范：不能只靠颜色） */}
-              <div className="flex items-center justify-between text-2xs text-subtle">
-                <span>{fleetDays[0]?.date}</span>
-                <span className="num">可用率 {uptimeAvailability(fleetDays)}%</span>
-                <span>今天</span>
+              <div className="flex items-center gap-2 text-2xs text-subtle">
+                <span className="shrink-0">{fleetDays[0]?.date}</span>
+                <UptimeStrip
+                  days={fleetDays}
+                  label="机队"
+                  className="min-w-0 flex-1"
+                  segmentClassName="h-4"
+                />
+                {/* 数值以文字可见（skill 的可视化规范：不能只靠颜色） */}
+                <span className="num shrink-0">
+                  可用率 {uptimeAvailability(fleetDays)}%
+                </span>
               </div>
-              {topConcerns.length > 0 && (
-                <div className="mt-auto flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t pt-2 text-2xs text-muted-foreground">
-                  <span className="text-subtle">需要处理</span>
-                  {topConcerns.map((concern) => (
-                    <Link
-                      key={concern.id + concern.reason}
-                      to={`?server=${concern.id}`}
-                      className="rounded-xs underline-offset-2 transition-colors dur-2 hover:text-foreground hover:underline"
-                    >
-                      <span className={cn("num", concern.tone === "crit" ? "text-crit-text" : "text-warn-text")}>
-                        {concern.name}
-                      </span>{" "}
-                      {concern.reason}
-                    </Link>
-                  ))}
-                </div>
-              )}
             </dd>
           </div>
 
@@ -665,6 +658,44 @@ export function OverviewPage() {
             </div>
           ))}
         </dl>
+        )}
+        {/*
+          「需要处理」从主卡里搬出来，单独占一行。
+          搬出来的原因：塞在主卡里会把主卡撑高一大截，逼得旁边 4 张 tile 一起拉伸
+          （实测每张 tile 170px 高、内容只有 44.6px，**59% 是空白**）；
+          而且它本来就有 3 条，窄卡里会折成两行。整行之后不折行、更好扫。
+        */}
+        {loaded && topConcerns.length > 0 && (
+          <div className="mt-2.5 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-2xs">
+            <span className="flex items-center gap-1.5 font-medium text-foreground">
+              <WarningCircle className="size-3.5 shrink-0 text-warn-text" />
+              需要处理 {concerns.length} 项
+            </span>
+            <span aria-hidden className="h-3.5 w-px bg-border" />
+            {topConcerns.map((concern) => (
+              <Link
+                key={concern.id + concern.reason}
+                to={`?server=${concern.id}`}
+                className="rounded-xs text-muted-foreground underline-offset-2 transition-colors dur-2 hover:text-foreground hover:underline"
+              >
+                <span
+                  className={cn(
+                    "num",
+                    concern.tone === "crit" ? "text-crit-text" : "text-warn-text",
+                  )}
+                >
+                  {concern.name}
+                </span>{" "}
+                {concern.reason}
+              </Link>
+            ))}
+            <Link
+              to="?state=bad"
+              className="ml-auto shrink-0 text-muted-foreground underline-offset-2 transition-colors dur-2 hover:text-foreground hover:underline"
+            >
+              查看全部异常 →
+            </Link>
+          </div>
         )}
 
       {/*

@@ -153,6 +153,39 @@ test.describe("后台", () => {
     await expect(crumbs).toHaveText(["设置", "数据与保留"])
   })
 
+  /*
+    布局质量守卫：卡片不能"被拉伸成空盒子"。
+
+    这条是被真实缺陷逼出来的：v2 让主卡（多一条 30 天条 + 「需要处理」）与 4 张 tile
+    同高，tile 被拉到 170px 而内容只有 44.6px —— **59% 是空白**，单独一个「3」
+    飘在卡片中间。截图评审时一眼就能看出来，但快照测试照样绿（它只比对"和上次一样"）。
+    所以补一条**结构性**断言：任一卡片的内部空白不得超过卡片高度的 35%。
+  */
+  test("后台 · 顶部卡片没有大面积空白", async ({ page }) => {
+    await makeDeterministic(page)
+    await page.goto("/admin/")
+    await waitForData(page)
+
+    const waste = await page.evaluate(() => {
+      const cards = [...document.querySelectorAll('[data-testid="admin-stats"] > div')]
+      return cards.map((card) => {
+        // 只算**在流内**的子元素：stretched link 是 absolute inset-0，会把统计带偏
+        const kids = [...card.children].filter(
+          (el) =>
+            getComputedStyle(el).position === "static" &&
+            !(el.tagName === "SPAN" && el.className.includes("w-[3px]")),
+        )
+        const rects = kids.map((el) => el.getBoundingClientRect())
+        let gap = 0
+        for (let i = 1; i < rects.length; i++) gap += rects[i].top - rects[i - 1].bottom
+        const height = card.getBoundingClientRect().height
+        return height > 0 ? Math.round((gap / height) * 100) : 0
+      })
+    })
+    expect(waste.length).toBeGreaterThan(0)
+    for (const percent of waste) expect(percent).toBeLessThanOrEqual(35)
+  })
+
   test("后台 · 侧栏折叠后的样子", async ({ page }) => {
     await makeDeterministic(page)
     await page.goto("/admin/")
