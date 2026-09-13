@@ -530,12 +530,17 @@ export function OverviewPage() {
         <dl
           data-testid="admin-stats"
           /*
-            items-start：卡片**贴合自己的内容**，不互相拉伸。
-            拉伸过一次才知道代价 —— 主卡因为多一条 30 天条和「需要处理」而更高，
-            旁边 4 张 tile 被拉到同样高度，实测每张 170px 里只有 44.6px 是内容，
-            59% 是空白，单个「3」飘在中间。
+            等高（默认 stretch）：**卡片底边必须齐**。
+            走过两次弯路，记在这里：
+              1. 光等高 + 主卡多两行内容 → tile 被拉到 170px 而内容只有 44.6px，
+                 59% 是空白，单个「3」飘在中间；
+              2. 改 items-start 让每张贴合内容 → 空白没了，但**底边散成 96/83**，
+                 1280 下主卡 113 而 tile 83，一排卡片参差不齐。
+            正解是两头都做：**等高**（底边齐）+ **让 tile 的内容自然长到主卡那么高**
+            （把内部间距从 gap-1.5 加到 gap-2.5，数值行统一 leading-7）。
+            这样拉伸量只剩 2px 左右，既没有空白、也没有参差。
           */
-          className="grid shrink-0 grid-cols-2 items-start gap-2.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-[minmax(0,2.15fr)_repeat(5,minmax(0,1fr))]"
+          className="grid shrink-0 grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-[minmax(0,2.15fr)_repeat(5,minmax(0,1fr))]"
         >
           {/*
             v2：从"5 张完全等价的卡"改成"1 个状态主卡 + 4 个紧凑指标"。
@@ -544,7 +549,7 @@ export function OverviewPage() {
             其余四项降为紧凑指标（宽度 1fr），主次靠**宽度**分层而不是高度
             （§BD 刚把卡片收敛成"纯白 + 3px 指示条"，再用高度做层级会把节奏弄乱）。
           */}
-          <div className="card relative col-span-2 flex flex-col gap-2 overflow-hidden p-3 sm:col-span-3 lg:col-span-5 xl:col-span-1">
+          <div className="card relative col-span-2 flex flex-col gap-2.5 overflow-hidden p-3 sm:col-span-3 lg:col-span-5 xl:col-span-1">
             {/* 与其它异常卡同一个通道：有机器离线就上 3px 指示条（数字变红单独一处会显得不一致） */}
             {fleet.length - online > 0 && (
               <span aria-hidden className="absolute inset-y-0 left-0 w-[3px] bg-crit" />
@@ -557,7 +562,7 @@ export function OverviewPage() {
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <span
                   className={cn(
-                    "num text-2xl font-semibold leading-none tracking-tight",
+                    "num text-2xl font-semibold leading-7 tracking-tight",
                     fleet.length - online > 0 && "text-crit-text",
                   )}
                 >
@@ -693,7 +698,7 @@ export function OverviewPage() {
                   justify-between：4 张 tile 与主卡同高（grid 拉伸），
                   内容按"标签 / 数字 / 说明"三段分布，否则底部会空出一大块。
                 */
-                "card relative flex flex-col justify-between gap-1.5 overflow-hidden p-3",
+                "card relative flex flex-col gap-2.5 overflow-hidden p-3",
                 // 可点之后 hover 必须有反馈；hover 底色统一用 /50（与数据行同一个步骤）
                 "transition-colors dur-2 has-[a:hover]:bg-muted/50",
                 /*
@@ -732,15 +737,21 @@ export function OverviewPage() {
                 <span className="truncate">{item.label}</span>
               </dt>
               {/* 只有关键数字上色 —— 底色留白，靠这一处把异常"顶"出来 */}
+              {/* leading-7：与主卡的大号数字占同一个行高，一排卡片的数字才会在同一水平线上 */}
               <dd
                 className={cn(
-                  "num truncate text-lg font-semibold leading-none tracking-tight",
+                  "num truncate text-lg font-semibold leading-7 tracking-tight",
                   item.tone && TONE_TEXT[item.tone],
                 )}
               >
                 {item.value}
               </dd>
-              <div className="flex items-center gap-1.5 text-2xs text-subtle">
+              {/*
+                mt-auto：卡片等高时，余量（1280 下约 17px，因为主卡的"在线 · N 台离线"
+                会折成两行）落到末行**之前**，于是各卡的末行都贴着卡片底部，
+                与主卡那条 30 天状态条在同一水平线上。
+              */}
+              <div className="mt-auto flex items-center gap-1.5 text-2xs text-subtle">
                 {/*
                   状态点：正常=绿、异常=对应警示色（静态，不呼吸 —— §P 的硬约束）。
                   只给**有健康语义**的卡：探测任务与告警规则是配置数量，停用是有意为之。

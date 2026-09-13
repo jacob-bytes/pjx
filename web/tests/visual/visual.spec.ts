@@ -229,15 +229,34 @@ test.describe("后台", () => {
     await expect(page.locator("tbody tr")).toHaveCount(count("触发中事件"))
   })
 
-  test("后台 · 顶部卡片没有大面积空白", async ({ page }) => {
+  /*
+    顶部卡片的两条不变量（都是被真实缺陷逼出来的，两条都踩过）：
+
+      ① **同排底边必须齐**。走过一次 items-start 的弯路：为了让卡片不被拉成空盒子，
+         改成贴合内容 —— 空白没了，但底边散成 96/83（1280 下主卡 113 而 tile 83），
+         一排卡片参差不齐，需求方一眼看出"排位错乱"。
+      ② **内部不能有大面积空白**。反面也踩过：光等高而主卡多两行内容，
+         tile 被拉到 170px 而内容只有 44.6px，59% 是空白，单个「3」飘在中间。
+
+    正解是两头都做：等高 + 让 tile 的内容自然长到主卡那么高（内部间距 gap-2.5、
+    数值行统一 leading-7、末行 mt-auto）。这条用例把这个平衡锁住 —— 两个方向都不许破。
+  */
+  test("后台 · 顶部卡片同排对齐且不空", async ({ page }) => {
     await makeDeterministic(page)
     await page.goto("/admin/")
     await waitForData(page)
 
-    const waste = await page.evaluate(() => {
+    const metrics = await page.evaluate(() => {
       const cards = [...document.querySelectorAll('[data-testid="admin-stats"] > div')]
-      return cards.map((card) => {
-        // 只算**在流内**的子元素：stretched link 是 absolute inset-0，会把统计带偏
+      const rows = new Map<number, number[]>()
+      const waste: number[] = []
+      for (const card of cards) {
+        const box = card.getBoundingClientRect()
+        const top = Math.round(box.top)
+        if (!rows.has(top)) rows.set(top, [])
+        rows.get(top)!.push(Math.round(box.bottom))
+
+        // 内部空白：只算**在流内**的子元素（stretched link 是 absolute inset-0，会把统计带偏）
         const kids = [...card.children].filter(
           (el) =>
             getComputedStyle(el).position === "static" &&
@@ -246,12 +265,17 @@ test.describe("后台", () => {
         const rects = kids.map((el) => el.getBoundingClientRect())
         let gap = 0
         for (let i = 1; i < rects.length; i++) gap += rects[i].top - rects[i - 1].bottom
-        const height = card.getBoundingClientRect().height
-        return height > 0 ? Math.round((gap / height) * 100) : 0
-      })
+        waste.push(box.height > 0 ? Math.round((gap / box.height) * 100) : 0)
+      }
+      const ragged = [...rows.values()].filter((bottoms) => new Set(bottoms).size > 1).length
+      return { cards: cards.length, ragged, waste }
     })
-    expect(waste.length).toBeGreaterThan(0)
-    for (const percent of waste) expect(percent).toBeLessThanOrEqual(35)
+
+    expect(metrics.cards).toBeGreaterThan(0)
+    // ① 同一排的卡片底边必须一致
+    expect(metrics.ragged).toBe(0)
+    // ② 任一卡片的内部空白不得超过 35%
+    for (const percent of metrics.waste) expect(percent).toBeLessThanOrEqual(35)
   })
 
   test("后台 · 侧栏折叠后的样子", async ({ page }) => {
