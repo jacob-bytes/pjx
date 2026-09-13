@@ -193,11 +193,8 @@ test.describe("后台", () => {
     const count = (label: string) =>
       Number((values[label] ?? "").match(/\d+/)?.[0] ?? -1)
 
-    // ① 三个"台数"卡片各自的下钻
-    for (const [label, param] of [
-      ["需要处理", "any"],
-      ["agent 落后", "agent"],
-    ] as const) {
+    // ① 「agent 落后 3 台」的下钻
+    for (const [label, param] of [["agent 落后", "agent"]] as const) {
       await gotoAdmin()
       await page.locator(`[data-testid="admin-stats"] a[aria-label^="${label}"]`).click()
       expect(page.url()).toContain(`issue=${param}`)
@@ -205,12 +202,13 @@ test.describe("后台", () => {
       await expect(page.locator("tbody tr")).toHaveCount(count(label))
     }
 
-    // ② 主卡里的「N 台离线」
+    // ② 横幅上的「需要处理 N 台」= 全部待办
     await gotoAdmin()
-    const offlineLink = page.locator('[data-testid="admin-stats"] a[href*="issue=offline"]')
-    const offline = Number((await offlineLink.textContent())?.match(/\d+/)?.[0] ?? -1)
-    await offlineLink.click()
-    await expect(page.locator("tbody tr")).toHaveCount(offline)
+    const bannerText = await page.locator("main").innerText()
+    const total = Number(bannerText.match(/需要处理 (\d+) 台/)?.[1] ?? -1)
+    expect(total).toBeGreaterThanOrEqual(0)
+    await page.locator('main a[href*="issue=any"]').first().click()
+    await expect(page.locator("tbody tr")).toHaveCount(total)
 
     // ③ 横幅上的分类计数（故障 / 维护）
     for (const label of ["故障", "维护"]) {
@@ -222,11 +220,6 @@ test.describe("后台", () => {
       await expect(page.locator("tbody tr")).toHaveCount(want)
     }
 
-    // ④ 事件卡 → 事件页（带上 state=firing，行数同样要对上）
-    await gotoAdmin()
-    await page.locator('[data-testid="admin-stats"] a[aria-label^="触发中事件"]').click()
-    await page.waitForURL(/alerts/)
-    await expect(page.locator("tbody tr")).toHaveCount(count("触发中事件"))
   })
 
   /*

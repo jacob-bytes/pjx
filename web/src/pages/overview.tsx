@@ -12,7 +12,6 @@ import {
   WarningCircle,
   Funnel,
   X,
-  Wrench,
 } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { EmptyState } from "@/components/empty-state"
@@ -43,7 +42,6 @@ import {
 } from "@/components/ui/table"
 import { Skeleton, TableSkeleton } from "@/components/ui/skeleton"
 import {
-  alertEvents,
   alertRules,
   fleet,
   probes,
@@ -225,32 +223,6 @@ function SortableHead({
   )
 }
 
-/*
-  告警态 KPI 卡片：**不铺大面积底色**。
-
-  §BA 那版是整卡染色（底 + 描边）。前端同事的反馈是那样"整块彩色"太重、
-  5 张卡的信息层级被底色盖住了，改用三个更克制的通道：
-    1. 左边缘 3px 指示条（形状 + 颜色，位置固定在卡片外沿，不干扰阅读区）
-    2. **只有关键数字**上警示色（文字）
-    3. 状态点（圆点）
-  底色保持纯白，异常卡片与正常卡片的"体量"仍然一样，靠这三处区分。
-
-  ⚠️ 注意"呼吸灯"：同事建议正常用呼吸圆点。本项目有一条硬约束 ——
-  **健康的点不许 pulse**（§P：只有离线/告警才允许呼吸），所以这里所有圆点都是静态的。
-*/
-const TONE_BAR: Record<"warn" | "crit", string> = {
-  warn: "bg-warn",
-  crit: "bg-crit",
-}
-const TONE_TEXT: Record<"warn" | "crit", string> = {
-  warn: "text-warn-text",
-  crit: "text-crit-text",
-}
-const TONE_DOT: Record<"warn" | "crit" | "ok", string> = {
-  warn: "bg-warn",
-  crit: "bg-crit",
-  ok: "bg-ok",
-}
 
 export function OverviewPage() {
   useFleetTick()
@@ -479,9 +451,6 @@ export function OverviewPage() {
 
   const topConcerns = concerns.slice(0, 3)
 
-  const firingEvents = alertEvents.filter((event) => event.state === "firing")
-  const firing = firingEvents.length
-  const firingCrit = firingEvents.filter((event) => event.level === "crit").length
   const staleAgents = fleet.filter(
     // 离线机器不计入"agent 落后"：它已经在「在线」那张卡里算过一次了，
     // 而离线机器的 agent 版本本来就无从升级（§AF：同一件事只报一次）
@@ -517,7 +486,7 @@ export function OverviewPage() {
         */}
         {!loaded ? (
           <div
-            className="grid shrink-0 grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-[minmax(0,2.15fr)_repeat(5,minmax(0,1fr))]"
+            className="grid shrink-0 grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-[minmax(0,2.15fr)_repeat(3,minmax(0,1fr))]"
             aria-busy="true"
             aria-label="加载中"
           >
@@ -540,7 +509,7 @@ export function OverviewPage() {
             （把内部间距从 gap-1.5 加到 gap-2.5，数值行统一 leading-7）。
             这样拉伸量只剩 2px 左右，既没有空白、也没有参差。
           */
-          className="grid shrink-0 grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-[minmax(0,2.15fr)_repeat(5,minmax(0,1fr))]"
+          className="grid shrink-0 grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-[minmax(0,2.15fr)_repeat(3,minmax(0,1fr))]"
         >
           {/*
             v2：从"5 张完全等价的卡"改成"1 个状态主卡 + 4 个紧凑指标"。
@@ -549,33 +518,17 @@ export function OverviewPage() {
             其余四项降为紧凑指标（宽度 1fr），主次靠**宽度**分层而不是高度
             （§BD 刚把卡片收敛成"纯白 + 3px 指示条"，再用高度做层级会把节奏弄乱）。
           */}
-          <div className="card relative col-span-2 flex flex-col gap-2.5 overflow-hidden p-3 sm:col-span-3 lg:col-span-5 xl:col-span-1">
-            {/* 与其它异常卡同一个通道：有机器离线就上 3px 指示条（数字变红单独一处会显得不一致） */}
-            {fleet.length - online > 0 && (
-              <span aria-hidden className="absolute inset-y-0 left-0 w-[3px] bg-crit" />
-            )}
+          <div className="card relative col-span-2 flex flex-col gap-2.5 overflow-hidden p-3 sm:col-span-3 xl:col-span-1">
             <dt className="flex items-center gap-1.5 text-2xs text-muted-foreground">
               <DesktopTower className="size-3.5 shrink-0 text-muted-foreground/60" />
               <span className="truncate">机队状态</span>
             </dt>
             <dd className="flex flex-col gap-2">
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <span
-                  className={cn(
-                    "num text-2xl font-semibold leading-7 tracking-tight",
-                    fleet.length - online > 0 && "text-crit-text",
-                  )}
-                >
+                <span className="num text-2xl font-semibold leading-7 tracking-tight">
                   {online} / {fleet.length}
                 </span>
                 <span className="flex items-center gap-1.5 text-2xs text-subtle">
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "size-[6px] shrink-0 rounded-full",
-                      fleet.length - online > 0 ? "bg-crit" : "bg-ok",
-                    )}
-                  />
                   {fleet.length - online > 0 ? (
                     <>
                       在线 ·{" "}
@@ -615,52 +568,8 @@ export function OverviewPage() {
 
           {[
             {
-              /*
-                改名的理由：原来叫「触发中告警」、说明文字写「需要处理」——
-                而页面下方那条「需要处理」是**节点状态**的另一套口径，
-                同一个词指两件事，数字还对不上（卡片 3 / 横幅 5）。
-                现在它是**事件流**：名字点明"事件"，说明给级别构成，点进事件页。
-              */
-              label: "触发中事件",
-              value: String(firing),
-              tone:
-                firing === 0
-                  ? null
-                  : firingCrit > 0
-                    ? ("crit" as const)
-                    : ("warn" as const),
-              note:
-                firing === 0
-                  ? "没有触发中的事件"
-                  : `严重 ${firingCrit} · 警告 ${firing - firingCrit}`,
-              icon: WarningCircle,
-              // 带上 state=firing：卡片说 3 条，点进去就正好 3 行（告警页新增该筛选）
-              to: "/alerts?state=firing",
-            },
-            {
-              /*
-                节点层的**唯一**汇总口径：一台机器一条待办。
-                value（台数）与下方横幅的项数、以及点进来的行数**三者相等**。
-              */
-              label: "需要处理",
-              value: `${concerns.length} 台`,
-              tone:
-                concerns.length === 0
-                  ? null
-                  : faultCount > 0
-                    ? ("crit" as const)
-                    : ("warn" as const),
-              note:
-                concerns.length === 0
-                  ? "没有需要处理的机器"
-                  : `故障 ${faultCount} · 维护 ${upkeepCount}`,
-              icon: Wrench,
-              to: "?issue=any",
-            },
-            {
               label: "agent 落后",
               value: `${staleAgents} 台`,
-              tone: staleAgents > 0 ? ("warn" as const) : null,
               note: staleAgents > 0 ? `最新 v${LATEST_AGENT}` : "都跑在最新版",
               icon: ArrowClockwise,
               // 改成**筛选**而不是排序：卡片说 3 台，点进去就必须正好 3 行
@@ -669,8 +578,6 @@ export function OverviewPage() {
             {
               label: "探测任务",
               value: `${enabledProbes} / ${aliveProbes.length} 启用`,
-              // 停用探测是有意为之，不是异常 —— 不套状态色（§AF：状态色只给异常）
-              tone: null,
               note:
                 enabledProbes === aliveProbes.length
                   ? "全部启用"
@@ -681,7 +588,6 @@ export function OverviewPage() {
             {
               label: "告警规则",
               value: `${enabledRules} / ${alertRules.length} 启用`,
-              tone: null,
               note:
                 enabledRules === alertRules.length
                   ? "全部启用"
@@ -694,9 +600,10 @@ export function OverviewPage() {
               key={item.label}
               className={cn(
                 /*
-                  纯白 + 微边框 + 轻阴影（card 工具类），异常态**不加底色**。
-                  justify-between：4 张 tile 与主卡同高（grid 拉伸），
-                  内容按"标签 / 数字 / 说明"三段分布，否则底部会空出一大块。
+                  **纯 shadcn 样式**：白卡 + 微边框 + 轻阴影，标签（muted）+ 图标（muted）
+                  + 大号数字（foreground）+ 说明（subtle）。
+                  不带色条、不带状态点、数字也不上色 —— 状态用文字说（"1 台离线"、
+                  "最新 v0.3.1"），异常集中在下方那条"需要处理"里表达。
                 */
                 "card relative flex flex-col gap-2.5 overflow-hidden p-3",
                 // 可点之后 hover 必须有反馈；hover 底色统一用 /50（与数据行同一个步骤）
@@ -708,16 +615,8 @@ export function OverviewPage() {
                   于是整个环被卡片裁掉，键盘用户看不到焦点。
                 */
                 "has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring",
-                item.tone && "pl-3.5",
               )}
             >
-              {/* 异常态：左边缘 3px 指示条（绝对定位，不用 border-l-4 —— 边框会挤内容） */}
-              {item.tone && (
-                <span
-                  aria-hidden
-                  className={cn("absolute inset-y-0 left-0 w-[3px]", TONE_BAR[item.tone])}
-                />
-              )}
               {/*
                 整卡可点：把 link 铺满卡片（stretched link），而不是把整张卡换成 <a> ——
                 这样 <dl>/<dt>/<dd> 的语义还在（标签:数值 本来就是 description list）。
@@ -738,35 +637,14 @@ export function OverviewPage() {
               </dt>
               {/* 只有关键数字上色 —— 底色留白，靠这一处把异常"顶"出来 */}
               {/* leading-7：与主卡的大号数字占同一个行高，一排卡片的数字才会在同一水平线上 */}
-              <dd
-                className={cn(
-                  "num truncate text-lg font-semibold leading-7 tracking-tight",
-                  item.tone && TONE_TEXT[item.tone],
-                )}
-              >
+              <dd className="num truncate text-lg font-semibold leading-7 tracking-tight">
                 {item.value}
               </dd>
               {/*
-                mt-auto：卡片等高时，余量（1280 下约 17px，因为主卡的"在线 · N 台离线"
-                会折成两行）落到末行**之前**，于是各卡的末行都贴着卡片底部，
+                mt-auto：卡片等高时，余量落到末行**之前**，各卡末行贴着卡片底部，
                 与主卡那条 30 天状态条在同一水平线上。
               */}
-              <div className="mt-auto flex items-center gap-1.5 text-2xs text-subtle">
-                {/*
-                  状态点：正常=绿、异常=对应警示色（静态，不呼吸 —— §P 的硬约束）。
-                  只给**有健康语义**的卡：探测任务与告警规则是配置数量，停用是有意为之。
-                */}
-                {item.label !== "探测任务" && item.label !== "告警规则" && (
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "size-[6px] shrink-0 rounded-full",
-                      item.tone ? TONE_DOT[item.tone] : TONE_DOT.ok,
-                    )}
-                  />
-                )}
-                <span className="truncate">{item.note}</span>
-              </div>
+              <div className="mt-auto truncate text-2xs text-subtle">{item.note}</div>
             </div>
           ))}
         </dl>
