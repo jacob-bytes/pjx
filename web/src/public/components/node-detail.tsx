@@ -178,7 +178,7 @@ function NodePicker({
               onChange={(event) => setQuery(event.target.value)}
               placeholder="搜索节点、地区、标签…"
               aria-label="搜索节点"
-              className="h-8 w-full rounded-[4px] border bg-background px-2.5 text-xs outline-none focus-visible:border-ring"
+              className="h-8 w-full rounded-xs border bg-background px-2.5 text-xs outline-none focus-visible:border-ring"
             />
           </div>
           <ul role="listbox" className="max-h-[320px] overflow-y-auto p-1">
@@ -198,7 +198,7 @@ function NodePicker({
                     onPick(item.id)
                   }}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-[4px] px-2.5 py-1.5 text-left text-xs transition-colors dur-1 hover:bg-accent",
+                    "flex w-full items-center gap-2 rounded-xs px-2.5 py-1.5 text-left text-xs transition-colors dur-1 hover:bg-accent",
                     item.id === current.id && "bg-accent font-medium",
                   )}
                 >
@@ -333,7 +333,7 @@ export function NodeDetail({
         </h1>
         {/* 国家徽章窄屏隐藏：给右侧的收藏/上一个/下一个腾出同行空间，
             否则整簇会换到第二行、左边留一大片空 */}
-        <span className="num hidden shrink-0 rounded-[3px] border px-1 text-2xs leading-4 text-subtle sm:inline">
+        <span className="num hidden shrink-0 rounded-xs border px-1 text-2xs leading-4 text-subtle sm:inline">
           {node.country}
         </span>
         <span
@@ -490,7 +490,7 @@ export function NodeDetail({
               max={customTo || undefined}
               onChange={(event) => setCustomFrom(event.target.value)}
               aria-label="起始日期"
-              className="num h-7 rounded-[4px] border bg-card px-2 text-2xs"
+              className="num h-7 rounded-xs border bg-card px-2 text-2xs"
             />
             <span aria-hidden>→</span>
             <input
@@ -499,7 +499,7 @@ export function NodeDetail({
               min={customFrom || undefined}
               onChange={(event) => setCustomTo(event.target.value)}
               aria-label="结束日期"
-              className="num h-7 rounded-[4px] border bg-card px-2 text-2xs"
+              className="num h-7 rounded-xs border bg-card px-2 text-2xs"
             />
             {!customSpan && (
               <span className="text-warn-text">两个日期都选上才有数据</span>

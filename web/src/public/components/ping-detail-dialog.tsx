@@ -1,5 +1,5 @@
 import { Fragment, useState } from "react"
-import { X } from "@phosphor-icons/react"
+import { Info, X } from "@phosphor-icons/react"
 import { Modal } from "@/components/modal"
 import { Segmented } from "@/components/segmented"
 import { IconButton } from "@/components/icon-button"
@@ -211,12 +211,11 @@ export function PingDetailDialog({
                         {row.target.label}
                       </span>
                       {/* ⓘ 悬浮看分布。用纯 CSS 的 group-hover，不引 tooltip 组件 */}
-                      <span
+                      {/* 原来是一个 10px 的「ⓘ」字形：既违反字号 token，又是"用文本当图标" */}
+                      <Info
                         aria-hidden
-                        className="ml-auto grid size-4 shrink-0 cursor-help place-items-center rounded-full text-[10px] text-muted-foreground/60"
-                      >
-                        ⓘ
-                      </span>
+                        className="ml-auto size-3.5 shrink-0 cursor-help text-muted-foreground/60"
+                      />
                     </div>
                     <div className="num mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                       <span className="font-medium">

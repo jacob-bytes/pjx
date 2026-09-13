@@ -44,8 +44,13 @@ FAILED = []
 for theme, sel in (("light", ":root"), ("dark", ".dark")):
     t = block(sel)
     bgs = [("background", t["--background"]), ("card", t["--card"]), ("muted", t["--muted"])]
+    # F8 新增的凹槽表面（工具栏底座 / 代码块）= color-mix(muted 60%, background)。
+    # 它是两个已验证表面的混合，理论上一定落在两者之间，但仍然显式纳入闸门。
+    # color-mix(in oklab, muted 60%, background) 在 OKLab 里是线性的，直接按分量混合即可
+    muted, bg = t["--muted"], t["--background"]
+    bgs.append(("canvas", tuple(muted[i] * 0.6 + bg[i] * 0.4 for i in range(3))))
     print(f"\n=== {theme} ===  bg {hexs(t['--background'])}  card {hexs(t['--card'])}  muted {hexs(t['--muted'])}")
-    print(f"  {'token':<18}{'hex':<10}{'on bg':>8}{'on card':>9}{'on muted':>10}   AA(4.5)")
+    print(f"  {'token':<18}{'hex':<10}{'on bg':>8}{'on card':>9}{'on muted':>10}{'on canvas':>11}   AA(4.5)")
     for name in TEXT:
         key = "--" + name
         if key not in t:
@@ -54,7 +59,7 @@ for theme, sel in (("light", ":root"), ("dark", ".dark")):
         rs = [cr(c, b[1]) for b in bgs]
         ok = min(rs) >= 4.5
         if not ok: FAILED.append((theme,name))
-        print(f"  {name:<18}{hexs(c):<10}{rs[0]:7.2f} {rs[1]:8.2f} {rs[2]:9.2f}   {'PASS' if ok else 'FAIL'}")
+        print(f"  {name:<18}{hexs(c):<10}{rs[0]:7.2f} {rs[1]:8.2f} {rs[2]:9.2f} {rs[3]:10.2f}   {'PASS' if ok else 'FAIL'}")
 
 # ---- C1：毛玻璃卡片上的文字 ----
 # 卡片是 color-mix(in oklab, card 82%, transparent) 叠在渐变上。
@@ -116,4 +121,4 @@ for theme, sel in (("light", ":root"), ("dark", ".dark")):
 print()
 if FAILED:
     print("✗ 不达标:", ", ".join(f"{t}/{n}" for t,n in FAILED)); sys.exit(1)
-print("✓ 所有文字 token 在 background / card / muted 上均 ≥4.5:1")
+print("✓ 所有文字 token 在 background / card / muted / canvas 上均 ≥4.5:1")

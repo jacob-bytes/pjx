@@ -11,7 +11,7 @@ export function Skeleton({
     <div
       data-slot="skeleton"
       aria-hidden
-      className={cn("animate-pulse rounded-[4px] bg-muted", className)}
+      className={cn("animate-pulse rounded-xs bg-muted", className)}
       {...props}
     />
   )

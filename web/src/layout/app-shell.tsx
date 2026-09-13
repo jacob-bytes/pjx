@@ -93,7 +93,7 @@ function SidebarNav({
           collapsed ? "px-2" : "px-4 pr-12 md:pr-4",
         )}
       >
-        <span className="grid size-5 shrink-0 place-items-center rounded-[5px] bg-foreground font-mono text-2xs font-semibold text-background">
+        <span className="grid size-5 shrink-0 place-items-center rounded-xs bg-foreground font-mono text-2xs font-semibold text-background">
           p
         </span>
         <span className="truncate text-sm font-semibold tracking-tight">
@@ -348,7 +348,7 @@ export function AppShell() {
               >
                 <MagnifyingGlass className="size-3.5" />
                 <span className="hidden sm:inline">搜索</span>
-                <kbd className="num hidden rounded-[4px] border bg-muted px-1 text-2xs sm:inline">
+                <kbd className="num hidden rounded-xs border bg-muted px-1 text-2xs sm:inline">
                   ⌘K
                 </kbd>
               </Button>

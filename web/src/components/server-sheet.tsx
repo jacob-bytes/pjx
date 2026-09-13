@@ -127,7 +127,7 @@ export function ServerSheet({ server }: { server: Server }) {
           {maintenance && (
             <Badge
               variant="outline"
-              className="h-5 rounded-[4px] border-warn/40 px-1.5 text-2xs font-normal text-warn-text"
+              className="h-5 rounded-xs border-warn/40 px-1.5 text-2xs font-normal text-warn-text"
             >
               维护中
             </Badge>
@@ -216,7 +216,7 @@ export function ServerSheet({ server }: { server: Server }) {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-6 px-2 text-2xs touch:h-11 touch:min-w-11"
+                  className="h-7 px-2 text-2xs touch:h-11 touch:min-w-11"
                   onClick={() => setEditingTags(true)}
                 >
                   编辑
@@ -299,7 +299,7 @@ export function ServerSheet({ server }: { server: Server }) {
                       <Badge
                         variant="outline"
                         className={cn(
-                          "ml-auto h-5 shrink-0 rounded-[4px] px-1.5 text-2xs font-normal",
+                          "ml-auto h-5 shrink-0 rounded-xs px-1.5 text-2xs font-normal",
                           event.state === "firing"
                             ? "border-destructive/40 text-destructive"
                             : "text-subtle",

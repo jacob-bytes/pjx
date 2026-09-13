@@ -61,7 +61,7 @@ export function ToggleChip({
             : "bg-accent font-medium text-foreground"
           : variant === "raised"
             ? "text-muted-foreground hover:bg-surface-raised/60 hover:text-foreground"
-            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+            : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
         className,
       )}
     >

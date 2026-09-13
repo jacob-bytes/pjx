@@ -111,7 +111,7 @@ function ProbeRow({
           {dimmed && (
             <Badge
               variant="outline"
-              className="h-5 rounded-[4px] px-1.5 text-2xs font-normal text-subtle"
+              className="h-5 rounded-xs px-1.5 text-2xs font-normal text-subtle"
             >
               已停用
             </Badge>
@@ -121,7 +121,7 @@ function ProbeRow({
       <TableCell className="h-9 px-3">
         <Badge
           variant="outline"
-          className="num h-5 rounded-[4px] px-1.5 text-2xs font-medium"
+          className="num h-5 rounded-xs px-1.5 text-2xs font-medium"
         >
           {row.kind}
         </Badge>

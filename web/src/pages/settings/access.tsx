@@ -79,7 +79,7 @@ export function AccessPage() {
             </Button>
           }
         >
-          <pre className="num text-2xs overflow-x-auto rounded-md border bg-muted/40 p-3 leading-relaxed text-muted-foreground">
+          <pre className="num text-2xs overflow-x-auto rounded-md border bg-canvas p-3 leading-relaxed text-muted-foreground">
             {INSTALL_COMMAND}
           </pre>
         </SettingsSection>
@@ -172,7 +172,7 @@ export function AccessPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">令牌</Label>
-                  <pre className="num text-2xs overflow-x-auto rounded-md border bg-muted/40 p-3 leading-relaxed">
+                  <pre className="num text-2xs overflow-x-auto rounded-md border bg-canvas p-3 leading-relaxed">
                     {issued.token}
                   </pre>
                   <Button

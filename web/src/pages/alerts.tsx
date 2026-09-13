@@ -45,7 +45,7 @@ function RuleRow({ rule }: { rule: AlertRule }) {
           {!enabled && (
             <Badge
               variant="outline"
-              className="h-5 rounded-[4px] px-1.5 text-2xs font-normal text-subtle"
+              className="h-5 rounded-xs px-1.5 text-2xs font-normal text-subtle"
             >
               已停用
             </Badge>
@@ -202,7 +202,7 @@ export function AlertsPage() {
                       <Badge
                         variant="outline"
                         className={cn(
-                          "h-5 rounded-[4px] px-1.5 text-2xs font-normal",
+                          "h-5 rounded-xs px-1.5 text-2xs font-normal",
                           event.state === "firing"
                             ? "border-destructive/40 text-destructive"
                             : "text-subtle",
@@ -219,7 +219,7 @@ export function AlertsPage() {
                         variant="ghost"
                         size="sm"
                         data-tap-area
-                        className="h-6 px-2 text-2xs text-muted-foreground"
+                        className="h-7 px-2 text-2xs text-muted-foreground"
                       >
                         静音
                       </Button>

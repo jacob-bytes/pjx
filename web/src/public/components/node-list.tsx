@@ -74,12 +74,12 @@ export function NodeList({
                         event.stopPropagation()
                         onOpen(node.id)
                       }}
-                      className="rounded-[3px] font-medium underline-offset-2 hover:underline"
+                      className="rounded-xs font-medium underline-offset-2 hover:underline"
                       title={node.name}
                     >
                       {node.name}
                     </button>
-                    <span className="num rounded-[3px] border px-1 text-2xs leading-4 text-subtle">
+                    <span className="num rounded-xs border px-1 text-2xs leading-4 text-subtle">
                       {node.country}
                     </span>
                   </div>

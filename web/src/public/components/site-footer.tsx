@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils"
  * 页脚再抄一份就变成第三处（后台侧栏还是字母方块 "p"）。
  */
 const MARK_SIZE = {
-  sm: { box: "size-4 rounded-[4px]", svg: "size-3" },
-  md: { box: "size-6 rounded-[6px]", svg: "size-3.5" },
+  sm: { box: "size-4 rounded-xs", svg: "size-3" },
+  md: { box: "size-6 rounded-sm", svg: "size-3.5" },
 } as const
 
 export function BrandMark({

@@ -118,7 +118,7 @@ function SortMenu({
                     onChange(item.key)
                   }}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-[6px] px-2 py-1.5 text-left text-xs transition-colors dur-1 hover:bg-accent",
+                    "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors dur-1 hover:bg-accent",
                     item.key === value && "font-medium",
                   )}
                 >

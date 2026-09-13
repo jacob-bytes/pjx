@@ -181,7 +181,7 @@ export function NotificationsPage() {
           <div className="flex items-center gap-2">
             <Badge
               variant="outline"
-              className="h-5 rounded-[4px] px-1.5 text-2xs font-normal text-muted-foreground"
+              className="h-5 rounded-xs px-1.5 text-2xs font-normal text-muted-foreground"
             >
               预留
             </Badge>

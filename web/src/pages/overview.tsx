@@ -141,7 +141,7 @@ function ToneBadge({
     <Tooltip label={title}>
       <span
         className={cn(
-        "num inline-flex h-5 max-w-full items-center rounded-[4px] border px-1.5 text-2xs",
+        "num inline-flex h-5 max-w-full items-center rounded-xs border px-1.5 text-2xs",
         BADGE_TONE[tone],
         className,
       )}
@@ -201,7 +201,7 @@ function SortableHead({
         // 表头按钮只有 40×17：补高度，触屏下再用伪元素把命中区撑开
         data-tap-area
         className={cn(
-          "inline-flex h-8 items-center gap-1 rounded-[3px] text-xs font-medium transition-colors dur-2 hover:text-foreground",
+          "inline-flex h-8 items-center gap-1 rounded-xs text-xs font-medium transition-colors dur-2 hover:text-foreground",
           active ? "text-foreground" : "text-muted-foreground",
         )}
       >
@@ -458,8 +458,17 @@ export function OverviewPage() {
               className={cn(
                 // 纯白 + 微边框 + 轻阴影（card 工具类），异常态**不加底色**
                 "card relative flex flex-col gap-1.5 overflow-hidden p-3 pl-3.5",
-                // 可点之后 hover 必须有反馈；焦点环由 stretched link 的 outline 承担
-                "transition-colors dur-2 has-[a:hover]:bg-muted/40",
+                // 可点之后 hover 必须有反馈；hover 底色统一用 /50（与数据行同一个步骤）
+                "transition-colors dur-2 has-[a:hover]:bg-muted/50",
+                /*
+                  F2：焦点环画在**卡片自己**身上。
+                  原来指望 stretched link 的 outline，但链接是 `absolute inset-0`、
+                  而卡片有 `overflow-hidden` —— 全局 `outline-offset: 2px` 是向外画的，
+                  于是整个环被卡片裁掉，键盘用户看不到焦点（像素级验证：25 个可聚焦元素里
+                  只有这 5 张卡焦点前后画面完全没变）。
+                  卡片自己的 ring 属于自身的绘制，不受自身 overflow 裁剪。
+                */
+                "has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring",
               )}
             >
               {/*
@@ -482,17 +491,15 @@ export function OverviewPage() {
               <Link
                 to={item.to}
                 aria-label={`${item.label}：${item.value}（${item.note}）`}
-                className="absolute inset-0 rounded-[inherit]"
+                className="absolute inset-0 rounded-[inherit] focus-visible:outline-none"
               />
               <dt className="flex items-center gap-1.5 text-2xs text-muted-foreground">
-                <item.icon
-                  className={cn(
-                    "size-3.5 shrink-0",
-                    item.tone
-                      ? TONE_TEXT[item.tone]
-                      : "text-muted-foreground/60",
-                  )}
-                />
+                {/*
+                  F5：图标回中性色。原来"指示条 + 图标 + 数字 + 说明文字 + 圆点"
+                  一共 5 处上色在说同一件事；现在图标与说明文字都是中性色，
+                  只剩指示条（形状）、数字（文字）、圆点（形状）三个通道。
+                */}
+                <item.icon className="size-3.5 shrink-0 text-muted-foreground/60" />
                 <span className="truncate">{item.label}</span>
               </dt>
               {/* 只有关键数字上色 —— 底色留白，靠这一处把异常"顶"出来 */}
@@ -504,12 +511,7 @@ export function OverviewPage() {
               >
                 {item.value}
               </dd>
-              <div
-                className={cn(
-                  "flex items-center gap-1.5 text-2xs",
-                  item.tone ? TONE_TEXT[item.tone] : "text-subtle",
-                )}
-              >
+              <div className="flex items-center gap-1.5 text-2xs text-subtle">
                 {/*
                   状态点：正常=绿、异常=对应警示色（静态，不呼吸）。
                   只给**有健康语义**的三张卡（在线 / 告警 / agent）——
@@ -555,7 +557,7 @@ export function OverviewPage() {
         0.4px 这种边界不能靠调间距去赌，grid 两列是确定的：
         第一行 [搜索 | 计数]，状态与标签各占一整行。
       */}
-      <div className="mt-3 grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 rounded-lg border bg-muted/60 p-1.5 sm:flex sm:flex-wrap sm:gap-x-2.5">
+      <div className="mt-3 grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 rounded-lg border bg-canvas p-1.5 sm:flex sm:flex-wrap sm:gap-x-2.5">
         {/*
           窄屏让搜索框 flex-1 与右侧的「12 台」共享一行：
           它原本 w-full 独占一行，导致工具栏多一行、且计数在标签那一行被挤到
@@ -747,11 +749,11 @@ export function OverviewPage() {
                 <TableRow
                   key={item.id}
                   /*
-                    斑马纹：这张表横向有 1000px，扫一行很容易串到下一行；
-                    交替底色比只靠 1px 分隔线更容易横向跟行。
-                    底色用 /20（比 hover 的 /50 轻），悬停仍然明确。
+                    F7：去掉斑马纹。原来"斑马纹 + 行分隔线 + 行 hover"是三套并行的
+                    行区分机制 —— 而 Linear / Vercel 这类克制的标杆一条都不用斑马纹，
+                    它更接近旧式后台模板。现在只留**分隔线 + hover** 两套。
                   */
-                  className="group/row cursor-pointer odd:bg-muted/20"
+                  className="group/row cursor-pointer"
                   onClick={() => setParams({ server: item.id })}
                 >
                   <TableCell className="h-11 px-3">
@@ -769,28 +771,18 @@ export function OverviewPage() {
                         <Link
                           to={`?server=${item.id}`}
                           onClick={(event) => event.stopPropagation()}
-                          className="truncate rounded-[3px] text-xs font-medium hover:underline underline-offset-2"
+                          className="truncate rounded-xs text-xs font-medium hover:underline underline-offset-2"
                         >
                           {item.name}
                         </Link>
                       </Tooltip>
                       {/*
-                        标签从裸文本（"香港 · 生产"）改成一个一个 Pill。
-                        用**中性**底色而不是前台的品牌淡蓝：这一列有 12 行 × 2~3 个，
-                        全用品牌色会铺成一片蓝，也削弱"单一蓝强调色"的纪律 ——
-                        品牌色留给真正的强调（选中态、导航指示条）。
-                        标签是配置，可能被「编辑标签」改过，不能直接读 mock。
+                        F6：节点列不再摆标签胶囊。
+                        原来一行有 7~8 个带底色/描边的小块（2 个标签胶囊 + OS 胶囊 +
+                        agent 徽章 + 开关 + 关注徽章 + ⋯），而且**地区是重复的**：
+                        这里一个「香港」胶囊，地址列又写着「… · 香港」。
+                        现在地区与用途合并到地址那一行，这一列只留名字。
                       */}
-                      <span className="flex min-w-0 items-center gap-1">
-                        {nodeTags(settings, item.id, item.tags).map((tag) => (
-                          <span
-                            key={tag}
-                            className="truncate rounded-[4px] bg-muted px-1.5 text-2xs leading-5 text-muted-foreground"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </span>
                     </div>
                   </TableCell>
                   <TableCell className="h-11 px-3">
@@ -804,30 +796,39 @@ export function OverviewPage() {
                       <span className="num truncate text-xs text-muted-foreground">
                         {item.ip}
                       </span>
-                      <span className="shrink-0 text-2xs text-subtle">
-                        {item.region}
+                      {/*
+                        地区 + 用途合成一行纯文本。标签是配置、可能被「编辑标签」改过，
+                        所以仍然读 nodeTags 而不是直接读 mock。
+                      */}
+                      <span className="truncate text-2xs text-subtle">
+                        {nodeTags(settings, item.id, item.tags).join(" · ")}
                       </span>
                     </div>
-                    {/* 系统做成浅色小标签：它是次要信息，但比纯文字更容易从地址里分出来 */}
+                    {/* F6：系统也改回纯文本 —— 它本来就是次要信息，不值得再占一个底色块 */}
                     <div className="mt-0.5 flex">
                       <Tooltip label={item.os}>
-                        <span className="inline-flex h-3.5 max-w-full items-center truncate rounded-[4px] bg-muted px-1.5 text-2xs leading-none text-muted-foreground">
+                        <span className="truncate text-2xs text-subtle">
                           {item.os}
                         </span>
                       </Tooltip>
                     </div>
                   </TableCell>
                   <TableCell className="h-11 px-3">
-                    <ToneBadge
-                      tone={item.agent !== LATEST_AGENT ? "warn" : "neutral"}
-                      title={
-                        item.agent !== LATEST_AGENT
-                          ? `落后于最新 v${LATEST_AGENT}`
-                          : `最新 v${LATEST_AGENT}`
-                      }
-                    >
-                      v{item.agent}
-                    </ToneBadge>
+                    {/*
+                      F6：只有**落后**的才是徽章（要看的异常），同版本的用纯文本。
+                      原来每行都有一个 v0.3.1 徽章，12 行就是 12 个没有信息量的底色块。
+                    */}
+                    {item.agent === LATEST_AGENT ? (
+                      <Tooltip label={`最新 v${LATEST_AGENT}`}>
+                        <span className="num text-xs text-muted-foreground">
+                          v{item.agent}
+                        </span>
+                      </Tooltip>
+                    ) : (
+                      <ToneBadge tone="warn" title={`落后于最新 v${LATEST_AGENT}`}>
+                        v{item.agent}
+                      </ToneBadge>
+                    )}
                   </TableCell>
                   <TableCell
                     className="h-11 px-3"
@@ -884,7 +885,7 @@ export function OverviewPage() {
                             variant="ghost"
                             size="icon"
                             aria-label="更多操作"
-                            className="size-6 text-muted-foreground touch:size-11"
+                            className="size-7 text-muted-foreground touch:size-11"
                           >
                             <DotsThree className="size-3.5" />
                           </Button>

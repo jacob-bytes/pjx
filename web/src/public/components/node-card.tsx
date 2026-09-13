@@ -243,13 +243,13 @@ export function NodeCard({
               event.stopPropagation()
               onOpen(node.id)
             }}
-            className="max-w-full truncate rounded-[3px] text-xs font-medium underline-offset-2 hover:underline"
+            className="max-w-full truncate rounded-xs text-xs font-medium underline-offset-2 hover:underline"
             title={node.name}
           >
             {node.name}
           </button>
         </h2>
-        <span className="num shrink-0 rounded-[3px] border px-1 text-2xs leading-4 text-subtle">
+        <span className="num shrink-0 rounded-xs border px-1 text-2xs leading-4 text-subtle">
           {node.country}
         </span>
         {/*
