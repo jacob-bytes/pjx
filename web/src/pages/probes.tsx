@@ -44,7 +44,7 @@ import {
 } from "@/components/ui/table"
 import { probes, useFleetTick, type Probe } from "@/lib/mock"
 import { createToken, type CreatedProbe } from "@/lib/settings"
-import { TABLE_SCROLLER } from "@/lib/layout"
+import { TABLE_VIEWPORT } from "@/lib/layout"
 import { cn } from "@/lib/utils"
 
 const INTERVALS = [
@@ -557,8 +557,8 @@ export function ProbesPage() {
   }
 
   return (
-    <>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="mb-3 flex shrink-0 flex-wrap items-center gap-2">
         <div className="relative w-full sm:w-[220px]">
           <MagnifyingGlass
             className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-subtle"
@@ -598,7 +598,7 @@ export function ProbesPage() {
           }
         />
       ) : (
-        <div className={TABLE_SCROLLER}>
+        <div className={TABLE_VIEWPORT}>
           <Table className="min-w-[1000px]">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
@@ -657,6 +657,6 @@ export function ProbesPage() {
           setDeleting(null)
         }}
       />
-    </>
+    </div>
   )
 }

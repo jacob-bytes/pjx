@@ -23,5 +23,13 @@
  * 定高 flex 列、表格区 `flex-1 min-h-0`，但那要动 app-shell 与四个页面的结构，
  * 属于独立一轮。
  */
-export const TABLE_SCROLLER =
-  "-mx-5 max-h-[calc(100svh-30.4rem)] overflow-auto px-5 sm:max-h-[calc(100svh-22rem)] lg:max-h-[calc(100svh-19.5rem)] xl:max-h-[calc(100svh-13.8rem)]"
+/**
+ * 表格滚动区。
+ *
+ * §P7 之后这里**没有断点魔法数**了：外壳（`app-shell.tsx`）是定高 flex 列，
+ * 表格页把根节点设成 `flex-1 min-h-0`，这一层就 `flex-1 min-h-0 overflow-auto` ——
+ * 高度由布局算出来，不再按断点猜"上方内容有多高"。
+ *
+ * （§AW 那次只是把 `11rem` 换成四档实测值，仍然是猜；现在把猜换掉了。）
+ */
+export const TABLE_VIEWPORT = "-mx-5 min-h-0 flex-1 overflow-auto px-5 pt-0.5"

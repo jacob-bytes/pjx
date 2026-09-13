@@ -17,6 +17,7 @@ import { SettingsProvider } from "@/components/settings-provider"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { LiveStatus } from "@/components/live-status"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { TooltipProvider } from "@/components/ui/tooltip"
 import { usePersistentState } from "@/lib/persist"
 import { cn } from "@/lib/utils"
 
@@ -224,7 +225,14 @@ export function AppShell() {
       探测（启停/删除）、告警（规则启停）也在写它 —— 必须是同一份。
     */
     <SettingsProvider>
-      <div className="min-h-svh">
+      {/* Radix Tooltip 的 Provider：全站共用同一份 delay 设置 */}
+      <TooltipProvider>
+      {/*
+        §P7：外壳是**定高的 flex 列**（视口高、自己不滚），
+        于是内容区能拿到确定的高度，表格区就能 `flex-1 min-h-0` 自己滚 ——
+        不再需要 `max-h-[calc(100svh-Nrem)]` 那种按断点手调的魔法数。
+      */}
+      <div className="flex h-svh flex-col overflow-hidden">
         <aside
           className="fixed inset-y-0 left-0 z-30 hidden flex-col border-r bg-card transition-[width] dur-3 md:flex"
           style={{ width: collapsed ? RAIL_W : SIDEBAR_W }}
@@ -249,12 +257,16 @@ export function AppShell() {
           `md:pl-[216px]`（后者写死了两种宽度里的哪一种都不对）。
         */}
         <div
-          className="flex min-w-0 flex-col transition-[padding-left] dur-3 md:pl-[var(--sidebar-w)]"
+          className="flex min-h-0 min-w-0 flex-1 flex-col transition-[padding-left] dur-3 md:pl-[var(--sidebar-w)]"
           style={
             { "--sidebar-w": `${collapsed ? RAIL_W : SIDEBAR_W}px` } as React.CSSProperties
           }
         >
-          <header className="sticky top-0 z-20 flex h-12 items-center gap-2 border-b bg-background px-3 sm:gap-3 sm:px-5">
+          {/*
+            外壳已经不滚了，所以顶栏不需要 sticky/z-20 —— 它下面就是滚动区，
+            不会再被内容盖住。
+          */}
+          <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-background px-3 sm:gap-3 sm:px-5">
             <Button
               variant="ghost"
               size="icon"
@@ -345,13 +357,20 @@ export function AppShell() {
             </div>
           </header>
 
-          <main className="min-w-0 flex-1 px-5 pb-16 pt-4">
+          {/*
+            min-h-0 是关键：flex 子项默认 min-height:auto，不加它这一列会被
+            内容顶开、滚动条跑到整页上，表格区也就没法自己滚了。
+            设置页这类普通长页面由 main 自己滚；表格页把根节点设成
+            `flex-1 min-h-0` 由表格区滚。
+          */}
+          <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto px-5 pb-6 pt-4">
             <Outlet />
           </main>
         </div>
 
         <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       </div>
+      </TooltipProvider>
     </SettingsProvider>
   )
 }

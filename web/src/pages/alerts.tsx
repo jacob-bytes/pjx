@@ -19,7 +19,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { alertEvents, alertRules, type AlertRule } from "@/lib/mock"
 import { pickParam } from "@/lib/url"
-import { TABLE_SCROLLER } from "@/lib/layout"
+import { TABLE_VIEWPORT } from "@/lib/layout"
 import { cn } from "@/lib/utils"
 
 const LEVEL_LABEL = { crit: "严重", warn: "警告", info: "信息" } as const
@@ -89,13 +89,29 @@ export function AlertsPage() {
     setParams(next)
   }
 
+  /*
+    页签也进 URL：总览的「告警规则」卡片要能直接落到规则页，
+    顺便让"我现在在看哪个页签"可以被分享 / 回退。
+  */
+  const tab = pickParam(params, "tab", ["events", "rules"] as const, "events")
+  const setTab = (value: string) => {
+    const next = new URLSearchParams(params)
+    if (value === "events") next.delete("tab")
+    else next.set("tab", value)
+    setParams(next)
+  }
+
   const events = alertEvents.filter(
     (event) => level === "all" || event.level === level,
   )
 
   return (
-    <Tabs defaultValue="events" className="gap-3">
-      <div className="flex items-center">
+    <Tabs
+      value={tab}
+      onValueChange={setTab}
+      className="flex min-h-0 flex-1 flex-col gap-3"
+    >
+      <div className="flex shrink-0 items-center">
         <TabsList className="h-8 justify-start gap-1 rounded-none bg-transparent p-0">
           <TabsTrigger
             value="events"
@@ -124,7 +140,7 @@ export function AlertsPage() {
         />
       </div>
 
-      <TabsContent value="events" className="mt-0">
+      <TabsContent value="events" className="mt-0 flex min-h-0 flex-1 flex-col">
         {events.length === 0 ? (
           <EmptyState
             icon={BellSlash}
@@ -142,7 +158,7 @@ export function AlertsPage() {
             }
           />
         ) : (
-            <div className={TABLE_SCROLLER}>
+            <div className={TABLE_VIEWPORT}>
               <Table className="min-w-[660px]">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
@@ -216,8 +232,8 @@ export function AlertsPage() {
         )}
       </TabsContent>
 
-      <TabsContent value="rules" className="mt-0">
-        <div className={TABLE_SCROLLER}>
+      <TabsContent value="rules" className="mt-0 flex min-h-0 flex-1 flex-col">
+        <div className={TABLE_VIEWPORT}>
           <Table className="min-w-[570px]">
             <TableHeader>
               <TableRow className="hover:bg-transparent">

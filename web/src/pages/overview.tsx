@@ -51,7 +51,8 @@ import {
 import { METRIC_LIMITS } from "@/lib/settings"
 import { pickParam } from "@/lib/url"
 import { formatLastSeen } from "@/lib/format"
-import { TABLE_SCROLLER } from "@/lib/layout"
+import { TABLE_VIEWPORT } from "@/lib/layout"
+import { Tooltip } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
 const TAGS = ["全部", "生产", "备用", "香港", "东京", "新加坡"] as const
@@ -137,17 +138,17 @@ function ToneBadge({
   children: ReactNode
 }) {
   return (
-    <span
-      title={title}
-      className={cn(
+    <Tooltip label={title}>
+      <span
+        className={cn(
         "num inline-flex h-5 max-w-full items-center rounded-[4px] border px-1.5 text-2xs",
         BADGE_TONE[tone],
         className,
       )}
     >
       <span className="truncate">{children}</span>
-    </span>
-  )
+      </span>
+    </Tooltip>  )
 }
 
 /*
@@ -192,10 +193,11 @@ function SortableHead({
       className={cn("h-9 px-3", className)}
       aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
     >
+      <Tooltip label={`按${SORTS[sortKey]}排序`}>
       <button
         type="button"
         onClick={() => onSort(sortKey, active && dir === "asc" ? "desc" : "asc")}
-        title={`按${SORTS[sortKey]}排序`}
+        aria-label={`按${SORTS[sortKey]}排序`}
         // 表头按钮只有 40×17：补高度，触屏下再用伪元素把命中区撑开
         data-tap-area
         className={cn(
@@ -213,21 +215,35 @@ function SortableHead({
           )}
         />
       </button>
-    </TableHead>
+      </Tooltip>    </TableHead>
   )
 }
 
 /*
-  告警态 KPI 卡片。
-  改前只有数值与说明文字染色，整张卡还是白的 —— 一眼扫过去 5 张卡一样重，
-  "1 台离线"要靠读文字才发现。现在超阈值的卡片**整卡染色**（底 + 描边 + 图标），
-  与软底徽章用同一套配方，只是铺到卡片这一层。
+  告警态 KPI 卡片：**不铺大面积底色**。
 
-  底色仍由 token 加透明度得来（`--warn` / `--crit` 的 8%），不引第二套调色板。
+  §BA 那版是整卡染色（底 + 描边）。前端同事的反馈是那样"整块彩色"太重、
+  5 张卡的信息层级被底色盖住了，改用三个更克制的通道：
+    1. 左边缘 3px 指示条（形状 + 颜色，位置固定在卡片外沿，不干扰阅读区）
+    2. **只有关键数字**上警示色（文字）
+    3. 状态点（圆点）
+  底色保持纯白，异常卡片与正常卡片的"体量"仍然一样，靠这三处区分。
+
+  ⚠️ 注意"呼吸灯"：同事建议正常用呼吸圆点。本项目有一条硬约束 ——
+  **健康的点不许 pulse**（§P：只有离线/告警才允许呼吸），所以这里所有圆点都是静态的。
 */
-const CARD_TONE: Record<"warn" | "crit", string> = {
-  warn: "border-warn/25 bg-warn/8",
-  crit: "border-crit/25 bg-crit/8",
+const TONE_BAR: Record<"warn" | "crit", string> = {
+  warn: "bg-warn",
+  crit: "bg-crit",
+}
+const TONE_TEXT: Record<"warn" | "crit", string> = {
+  warn: "text-warn-text",
+  crit: "text-crit-text",
+}
+const TONE_DOT: Record<"warn" | "crit" | "ok", string> = {
+  warn: "bg-warn",
+  crit: "bg-crit",
+  ok: "bg-ok",
 }
 
 export function OverviewPage() {
@@ -344,7 +360,7 @@ export function OverviewPage() {
   ).length
 
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col">
         {/*
           顶部 5 项统计：由 §AP 的扁平两级条改成**紧凑 KPI 卡片**。
 
@@ -363,7 +379,7 @@ export function OverviewPage() {
         */}
         {!loaded ? (
           <div
-            className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5"
+            className="grid shrink-0 grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5"
             aria-busy="true"
             aria-label="加载中"
           >
@@ -374,7 +390,7 @@ export function OverviewPage() {
         ) : (
         <dl
           data-testid="admin-stats"
-          className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5"
+          className="grid shrink-0 grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5"
         >
           {[
             {
@@ -387,6 +403,8 @@ export function OverviewPage() {
                   ? "全部在线"
                   : `${fleet.length - online} 台离线`,
               icon: DesktopTower,
+              // P8：点卡片去看"到底哪几台不健康"——不是装饰性 hover，是真的有去处
+              to: "?state=bad",
             },
             {
               label: "触发中告警",
@@ -400,6 +418,7 @@ export function OverviewPage() {
                     : ("warn" as const),
               note: firing > 0 ? "需要处理" : "没有触发中的告警",
               icon: WarningCircle,
+              to: "/alerts",
             },
             {
               label: "agent 落后",
@@ -407,6 +426,8 @@ export function OverviewPage() {
               tone: staleAgents > 0 ? ("warn" as const) : null,
               note: staleAgents > 0 ? `最新 v${LATEST_AGENT}` : "都跑在最新版",
               icon: ArrowClockwise,
+              // 排序而不是筛选：落后的那几台会排到最前，一眼就能看到
+              to: "?sort=agent&dir=asc",
             },
             {
               label: "探测任务",
@@ -418,6 +439,7 @@ export function OverviewPage() {
                   ? "全部启用"
                   : `${aliveProbes.length - enabledProbes} 个已停用`,
               icon: Broadcast,
+              to: "/probes",
             },
             {
               label: "告警规则",
@@ -428,38 +450,56 @@ export function OverviewPage() {
                   ? "全部启用"
                   : `${alertRules.length - enabledRules} 个已停用`,
               icon: Bell,
+              to: "/alerts?tab=rules",
             },
           ].map((item) => (
             <div
               key={item.label}
               className={cn(
-                "card flex flex-col gap-1.5 p-3",
-                item.tone && CARD_TONE[item.tone],
+                // 纯白 + 微边框 + 轻阴影（card 工具类），异常态**不加底色**
+                "card relative flex flex-col gap-1.5 overflow-hidden p-3 pl-3.5",
+                // 可点之后 hover 必须有反馈；焦点环由 stretched link 的 outline 承担
+                "transition-colors dur-2 has-[a:hover]:bg-muted/40",
               )}
             >
-              <dt
-                className={cn(
-                  "flex items-center gap-1.5 text-2xs",
-                  item.tone ? "text-foreground/70" : "text-muted-foreground",
-                )}
-              >
+              {/*
+                异常态：左边缘 3px 指示条。用绝对定位而不是 border-l-4 ——
+                边框会把内容挤 4px，5 张卡的文字左边界就对不齐了。
+              */}
+              {item.tone && (
+                <span
+                  aria-hidden
+                  className={cn(
+                    "absolute inset-y-0 left-0 w-[3px]",
+                    TONE_BAR[item.tone],
+                  )}
+                />
+              )}
+              {/*
+                整卡可点：把 link 铺满卡片（stretched link），而不是把整张卡换成 <a> ——
+                这样 <dl>/<dt>/<dd> 的语义还在（标签:数值 本来就是 description list）。
+              */}
+              <Link
+                to={item.to}
+                aria-label={`${item.label}：${item.value}（${item.note}）`}
+                className="absolute inset-0 rounded-[inherit]"
+              />
+              <dt className="flex items-center gap-1.5 text-2xs text-muted-foreground">
                 <item.icon
                   className={cn(
                     "size-3.5 shrink-0",
-                    item.tone === "crit"
-                      ? "text-crit-text"
-                      : item.tone === "warn"
-                        ? "text-warn-text"
-                        : "text-muted-foreground/60",
+                    item.tone
+                      ? TONE_TEXT[item.tone]
+                      : "text-muted-foreground/60",
                   )}
                 />
                 <span className="truncate">{item.label}</span>
               </dt>
+              {/* 只有关键数字上色 —— 底色留白，靠这一处把异常"顶"出来 */}
               <dd
                 className={cn(
                   "num truncate text-lg font-semibold leading-none tracking-tight",
-                  item.tone === "crit" && "text-crit-text",
-                  item.tone === "warn" && "text-warn-text",
+                  item.tone && TONE_TEXT[item.tone],
                 )}
               >
                 {item.value}
@@ -467,19 +507,21 @@ export function OverviewPage() {
               <div
                 className={cn(
                   "flex items-center gap-1.5 text-2xs",
-                  item.tone === "crit"
-                    ? "text-crit-text"
-                    : item.tone === "warn"
-                      ? "text-warn-text"
-                      : "text-subtle",
+                  item.tone ? TONE_TEXT[item.tone] : "text-subtle",
                 )}
               >
-                {item.tone && (
+                {/*
+                  状态点：正常=绿、异常=对应警示色（静态，不呼吸）。
+                  只给**有健康语义**的三张卡（在线 / 告警 / agent）——
+                  探测任务与告警规则是配置数量，停用是有意为之，套状态点会把
+                  "配置"说成"健康"（§AF）。
+                */}
+                {item.label !== "探测任务" && item.label !== "告警规则" && (
                   <span
                     aria-hidden
                     className={cn(
                       "size-[6px] shrink-0 rounded-full",
-                      item.tone === "crit" ? "bg-crit" : "bg-warn",
+                      item.tone ? TONE_DOT[item.tone] : TONE_DOT.ok,
                     )}
                   />
                 )}
@@ -513,7 +555,7 @@ export function OverviewPage() {
         0.4px 这种边界不能靠调间距去赌，grid 两列是确定的：
         第一行 [搜索 | 计数]，状态与标签各占一整行。
       */}
-      <div className="mb-3 mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 rounded-lg border bg-muted/60 p-1.5 sm:flex sm:flex-wrap sm:gap-x-2.5">
+      <div className="mt-3 grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 rounded-lg border bg-muted/60 p-1.5 sm:flex sm:flex-wrap sm:gap-x-2.5">
         {/*
           窄屏让搜索框 flex-1 与右侧的「12 台」共享一行：
           它原本 w-full 独占一行，导致工具栏多一行、且计数在标签那一行被挤到
@@ -609,7 +651,7 @@ export function OverviewPage() {
           }
         />
       ) : (
-          <div className={TABLE_SCROLLER}>
+          <div className={TABLE_VIEWPORT}>
             {/*
               列宽改成显式指定 + table-fixed，并且**按实测文字宽度给足**。
 
@@ -693,9 +735,9 @@ export function OverviewPage() {
                   dir={sortDir}
                   onSort={setSort}
                 >
-                  <span title="占阈值 90% 以上的那一项；都在 90% 以下时留空">
-                    关注
-                  </span>
+                  <Tooltip label="占阈值 90% 以上的那一项；都在 90% 以下时留空">
+                    <span>关注</span>
+                  </Tooltip>
                 </SortableHead>
                 <TableHead className="h-9 px-2" />
               </TableRow>
@@ -723,14 +765,15 @@ export function OverviewPage() {
                     */}
                     <div className="flex items-center gap-2">
                       {/* 真链接：键盘可达、可中键新开、可复制地址；行点击对鼠标仍然有效 */}
-                      <Link
-                        to={`?server=${item.id}`}
-                        onClick={(event) => event.stopPropagation()}
-                        title={item.name}
-                        className="truncate rounded-[3px] text-xs font-medium hover:underline underline-offset-2"
-                      >
-                        {item.name}
-                      </Link>
+                      <Tooltip label={item.name}>
+                        <Link
+                          to={`?server=${item.id}`}
+                          onClick={(event) => event.stopPropagation()}
+                          className="truncate rounded-[3px] text-xs font-medium hover:underline underline-offset-2"
+                        >
+                          {item.name}
+                        </Link>
+                      </Tooltip>
                       {/*
                         标签从裸文本（"香港 · 生产"）改成一个一个 Pill。
                         用**中性**底色而不是前台的品牌淡蓝：这一列有 12 行 × 2~3 个，
@@ -767,12 +810,11 @@ export function OverviewPage() {
                     </div>
                     {/* 系统做成浅色小标签：它是次要信息，但比纯文字更容易从地址里分出来 */}
                     <div className="mt-0.5 flex">
-                      <span
-                        className="inline-flex h-3.5 max-w-full items-center truncate rounded-[4px] bg-muted px-1.5 text-2xs leading-none text-muted-foreground"
-                        title={item.os}
-                      >
-                        {item.os}
-                      </span>
+                      <Tooltip label={item.os}>
+                        <span className="inline-flex h-3.5 max-w-full items-center truncate rounded-[4px] bg-muted px-1.5 text-2xs leading-none text-muted-foreground">
+                          {item.os}
+                        </span>
+                      </Tooltip>
                     </div>
                   </TableCell>
                   <TableCell className="h-11 px-3">
@@ -916,6 +958,6 @@ export function OverviewPage() {
           toast("已移除节点（演示）")
         }}
       />
-    </>
+    </div>
   )
 }

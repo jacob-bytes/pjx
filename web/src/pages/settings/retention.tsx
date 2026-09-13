@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { Tooltip } from "@/components/ui/tooltip"
 import {
   Table,
   TableBody,
@@ -290,7 +291,9 @@ export function RetentionPage() {
                   </TableCell>
                   <TableCell className="num h-10 px-3 text-right text-xs">
                     {h1Mb === null ? (
-                      <span title="永久保留没有上界，无法估算占用">—</span>
+                      <Tooltip label="永久保留没有上界，无法估算占用">
+                        <span>—</span>
+                      </Tooltip>
                     ) : (
                       `≈ ${h1Mb} MB`
                     )}
