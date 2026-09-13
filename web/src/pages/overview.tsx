@@ -10,6 +10,9 @@ import {
   DotsThree,
   MagnifyingGlass,
   WarningCircle,
+  Funnel,
+  X,
+  Wrench,
 } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { EmptyState } from "@/components/empty-state"
@@ -269,6 +272,26 @@ export function OverviewPage() {
     "name",
   )
   const sortDir = pickParam(params, "dir", ["asc", "desc"] as const, "asc")
+  /*
+    下钻筛选：卡片上的每个数字都能点成一个**行数完全一致**的列表。
+    "卡片说 3 台"与"点进去 3 行"必须永远相等 —— 这是需求方提的一致性问题，
+    所以口径统一成"一台机器一条待办"，并让这一条既进清单、也进筛选。
+  */
+  const issue = pickParam(
+    params,
+    "issue",
+    ["all", "any", "fault", "offline", "concern", "agent"] as const,
+    "all",
+  )
+  const setIssue = (value: string) =>
+    patchParams({ issue: value === "all" ? null : value })
+  const ISSUE_LABEL: Record<string, string> = {
+    any: "需要处理",
+    fault: "故障",
+    offline: "离线",
+    concern: "关注项超阈值",
+    agent: "agent 落后",
+  }
 
   const patchParams = (
     patch: Record<string, string | null>,
@@ -299,12 +322,77 @@ export function OverviewPage() {
   // 200 台规模下敲键盘不会被一次全表过滤卡住
   const deferredQuery = useDeferredValue(query)
 
+  /*
+    「需要处理」清单。
+
+    **一台机器只算一条**：原来按"问题"计（离线 1 条 + 关注项 1 条 + agent 3 条 = 5 条），
+    但真正要处理的是机器，而且同一台机器可能同时命中两类 —— 那样"几项"和
+    "筛出来几行"就对不上，卡片数字也就没法验证。现在按机器聚合，一台一条，
+    原因用 ` · ` 串起来，于是 **清单长度 ≡ 下钻后的行数**。
+
+    分类（需求方要的"分类隔离"）：
+      故障 = 已离线 / 关注项超阈值（硬件、服务）
+      维护 = agent 版本落后（软件版本、维护提示）
+    一台机器同时命中时按最靠前的那个归类。
+  */
+  type IssueKind = "offline" | "concern" | "agent"
+  const concerns: {
+    id: string
+    name: string
+    reason: string
+    kind: IssueKind
+    kinds: IssueKind[]
+  }[] = []
+  for (const node of fleet) {
+    const reasons: string[] = []
+    const kinds: IssueKind[] = []
+    if (node.offline) {
+      reasons.push("已离线")
+      kinds.push("offline")
+    } else {
+      const concern = tightestMetric(node)
+      if (concern?.over) {
+        reasons.push(`${concern.label} ${Math.round(concern.value)}%`)
+        kinds.push("concern")
+      }
+    }
+    if (!node.offline && compareVersion(node.agent, LATEST_AGENT) < 0) {
+      reasons.push(`agent v${node.agent}`)
+      kinds.push("agent")
+    }
+    if (kinds.length === 0) continue
+    concerns.push({
+      id: node.id,
+      name: node.name,
+      reason: reasons.join(" · "),
+      kind: kinds[0],
+      kinds,
+    })
+  }
+  const issueIds = (kind: "any" | "fault" | IssueKind) =>
+    new Set(
+      concerns
+        .filter((item) =>
+          kind === "any"
+            ? true
+            : kind === "fault"
+              ? item.kinds.some((k) => k !== "agent")
+              : item.kinds.includes(kind),
+        )
+        .map((item) => item.id),
+    )
+  /** 故障（离线 / 关注项）与维护（agent 落后）分开数 —— 卡片与横幅共用这两个数 */
+  const faultCount = concerns.filter((item) => item.kind !== "agent").length
+  const upkeepCount = concerns.length - faultCount
+
   const servers = useMemo(() => {
     const keyword = deferredQuery.trim().toLowerCase()
     return fleet.filter((item) => {
       if (filter === "ok" && item.status !== "ok") return false
       if (filter === "bad" && item.status === "ok") return false
       if (tag !== "全部" && !item.tags.includes(tag)) return false
+      // 下钻：只保留该问题集合里的机器（`concerns` 的 id 集合，行数必然与卡片数字相等）
+      if (issue !== "all" && !issueIds(issue).has(item.id)) return false
       if (!keyword) return true
       return (
         item.name.toLowerCase().includes(keyword) ||
@@ -312,7 +400,7 @@ export function OverviewPage() {
         item.tags.join(" ").toLowerCase().includes(keyword)
       )
     })
-  }, [deferredQuery, filter, tag])
+  }, [deferredQuery, filter, tag, issue])
 
   /*
     离线沉底 + 选中列的值比较。`concern` 用"最紧指标占阈值的比例"，
@@ -389,36 +477,6 @@ export function OverviewPage() {
     }
   })
 
-  /*
-    「需要处理」清单：把"扫 12 行找徽章"变成抬头就看到该管什么。
-    纯派生（离线 / 关注项超阈值 / agent 落后），不是新数据；每条直接打开对应节点面板。
-  */
-  const concerns: { id: string; name: string; reason: string; tone: "crit" | "warn" }[] = []
-  for (const node of fleet) {
-    if (node.offline) {
-      concerns.push({ id: node.id, name: node.name, reason: "已离线", tone: "crit" })
-      continue
-    }
-    const concern = tightestMetric(node)
-    if (concern?.over) {
-      concerns.push({
-        id: node.id,
-        name: node.name,
-        reason: `${concern.label} ${Math.round(concern.value)}%`,
-        tone: "crit",
-      })
-    }
-  }
-  for (const node of fleet) {
-    if (!node.offline && compareVersion(node.agent, LATEST_AGENT) < 0) {
-      concerns.push({
-        id: node.id,
-        name: node.name,
-        reason: `agent v${node.agent}`,
-        tone: "warn",
-      })
-    }
-  }
   const topConcerns = concerns.slice(0, 3)
 
   const firingEvents = alertEvents.filter((event) => event.state === "firing")
@@ -459,7 +517,7 @@ export function OverviewPage() {
         */}
         {!loaded ? (
           <div
-            className="grid shrink-0 grid-cols-2 gap-2.5 sm:grid-cols-4 xl:grid-cols-[minmax(0,2.15fr)_repeat(4,minmax(0,1fr))]"
+            className="grid shrink-0 grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-[minmax(0,2.15fr)_repeat(5,minmax(0,1fr))]"
             aria-busy="true"
             aria-label="加载中"
           >
@@ -477,7 +535,7 @@ export function OverviewPage() {
             旁边 4 张 tile 被拉到同样高度，实测每张 170px 里只有 44.6px 是内容，
             59% 是空白，单个「3」飘在中间。
           */
-          className="grid shrink-0 grid-cols-2 items-start gap-2.5 sm:grid-cols-4 xl:grid-cols-[minmax(0,2.15fr)_repeat(4,minmax(0,1fr))]"
+          className="grid shrink-0 grid-cols-2 items-start gap-2.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-[minmax(0,2.15fr)_repeat(5,minmax(0,1fr))]"
         >
           {/*
             v2：从"5 张完全等价的卡"改成"1 个状态主卡 + 4 个紧凑指标"。
@@ -486,7 +544,11 @@ export function OverviewPage() {
             其余四项降为紧凑指标（宽度 1fr），主次靠**宽度**分层而不是高度
             （§BD 刚把卡片收敛成"纯白 + 3px 指示条"，再用高度做层级会把节奏弄乱）。
           */}
-          <div className="card col-span-2 flex flex-col gap-2 p-3 sm:col-span-4 xl:col-span-1">
+          <div className="card relative col-span-2 flex flex-col gap-2 overflow-hidden p-3 sm:col-span-3 lg:col-span-5 xl:col-span-1">
+            {/* 与其它异常卡同一个通道：有机器离线就上 3px 指示条（数字变红单独一处会显得不一致） */}
+            {fleet.length - online > 0 && (
+              <span aria-hidden className="absolute inset-y-0 left-0 w-[3px] bg-crit" />
+            )}
             <dt className="flex items-center gap-1.5 text-2xs text-muted-foreground">
               <DesktopTower className="size-3.5 shrink-0 text-muted-foreground/60" />
               <span className="truncate">机队状态</span>
@@ -509,9 +571,19 @@ export function OverviewPage() {
                       fleet.length - online > 0 ? "bg-crit" : "bg-ok",
                     )}
                   />
-                  {fleet.length - online > 0
-                    ? `在线 · ${fleet.length - online} 台离线（${offlineNames}）`
-                    : "在线 · 全部在线"}
+                  {fleet.length - online > 0 ? (
+                    <>
+                      在线 ·{" "}
+                      <Link
+                        to="?issue=offline"
+                        className="rounded-xs underline-offset-2 transition-colors dur-2 hover:text-foreground hover:underline"
+                      >
+                        {fleet.length - online} 台离线（{offlineNames}）
+                      </Link>
+                    </>
+                  ) : (
+                    "在线 · 全部在线"
+                  )}
                 </span>
               </div>
               {/*
@@ -538,18 +610,47 @@ export function OverviewPage() {
 
           {[
             {
-              label: "触发中告警",
+              /*
+                改名的理由：原来叫「触发中告警」、说明文字写「需要处理」——
+                而页面下方那条「需要处理」是**节点状态**的另一套口径，
+                同一个词指两件事，数字还对不上（卡片 3 / 横幅 5）。
+                现在它是**事件流**：名字点明"事件"，说明给级别构成，点进事件页。
+              */
+              label: "触发中事件",
               value: String(firing),
-              // 触发中的事件里有 crit 级别的才是 crit，否则 warn
               tone:
                 firing === 0
                   ? null
                   : firingCrit > 0
                     ? ("crit" as const)
                     : ("warn" as const),
-              note: firing > 0 ? "需要处理" : "没有触发中的告警",
+              note:
+                firing === 0
+                  ? "没有触发中的事件"
+                  : `严重 ${firingCrit} · 警告 ${firing - firingCrit}`,
               icon: WarningCircle,
-              to: "/alerts",
+              // 带上 state=firing：卡片说 3 条，点进去就正好 3 行（告警页新增该筛选）
+              to: "/alerts?state=firing",
+            },
+            {
+              /*
+                节点层的**唯一**汇总口径：一台机器一条待办。
+                value（台数）与下方横幅的项数、以及点进来的行数**三者相等**。
+              */
+              label: "需要处理",
+              value: `${concerns.length} 台`,
+              tone:
+                concerns.length === 0
+                  ? null
+                  : faultCount > 0
+                    ? ("crit" as const)
+                    : ("warn" as const),
+              note:
+                concerns.length === 0
+                  ? "没有需要处理的机器"
+                  : `故障 ${faultCount} · 维护 ${upkeepCount}`,
+              icon: Wrench,
+              to: "?issue=any",
             },
             {
               label: "agent 落后",
@@ -557,8 +658,8 @@ export function OverviewPage() {
               tone: staleAgents > 0 ? ("warn" as const) : null,
               note: staleAgents > 0 ? `最新 v${LATEST_AGENT}` : "都跑在最新版",
               icon: ArrowClockwise,
-              // 排序而不是筛选：落后的那几台会排到最前，一眼就能看到
-              to: "?sort=agent&dir=asc",
+              // 改成**筛选**而不是排序：卡片说 3 台，点进去就必须正好 3 行
+              to: "?issue=agent",
             },
             {
               label: "探测任务",
@@ -669,7 +770,30 @@ export function OverviewPage() {
           <div className="mt-2.5 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-2xs">
             <span className="flex items-center gap-1.5 font-medium text-foreground">
               <WarningCircle className="size-3.5 shrink-0 text-warn-text" />
-              需要处理 {concerns.length} 项
+              需要处理 {concerns.length} 台
+            </span>
+            {/* 分类隔离：故障（硬件/服务）与维护（软件版本）分开计数，各自可下钻 */}
+            <span className="flex items-center gap-2">
+              {faultCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIssue("fault")}
+                  className="flex items-center gap-1 rounded-xs text-crit-text transition-colors dur-2 hover:underline"
+                >
+                  <span aria-hidden className="size-[6px] rounded-full bg-crit" />
+                  故障 {faultCount}
+                </button>
+              )}
+              {upkeepCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIssue("agent")}
+                  className="flex items-center gap-1 rounded-xs text-warn-text transition-colors dur-2 hover:underline"
+                >
+                  <span aria-hidden className="size-[6px] rounded-full bg-warn" />
+                  维护 {upkeepCount}
+                </button>
+              )}
             </span>
             <span aria-hidden className="h-3.5 w-px bg-border" />
             {topConcerns.map((concern) => (
@@ -681,7 +805,7 @@ export function OverviewPage() {
                 <span
                   className={cn(
                     "num",
-                    concern.tone === "crit" ? "text-crit-text" : "text-warn-text",
+                    concern.kind === "agent" ? "text-warn-text" : "text-crit-text",
                   )}
                 >
                   {concern.name}
@@ -690,10 +814,10 @@ export function OverviewPage() {
               </Link>
             ))}
             <Link
-              to="?state=bad"
+              to="?issue=any"
               className="ml-auto shrink-0 text-muted-foreground underline-offset-2 transition-colors dur-2 hover:text-foreground hover:underline"
             >
-              查看全部异常 →
+              查看全部 {concerns.length} 台 →
             </Link>
           </div>
         )}
@@ -768,6 +892,24 @@ export function OverviewPage() {
               { value: "bad", label: "异常" },
             ]}
           />
+          {/*
+            下钻筛选的活动态。
+            卡片上的数字点进来之后，这里必须看得见"现在在看哪一类"，
+            而且要能一键清掉 —— 否则用户会以为自己丢了几台机器。
+            放在状态分段**同一个 flex 容器里**：移动端的 grid 行结构不变。
+          */}
+          {issue !== "all" && (
+            <button
+              type="button"
+              onClick={() => setIssue("all")}
+              className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border bg-card px-2 text-2xs text-foreground transition-colors dur-2 hover:bg-muted/50"
+            >
+              <Funnel className="size-3 shrink-0 text-muted-foreground" />
+              {ISSUE_LABEL[issue]}
+              <X className="size-3 shrink-0 text-subtle" />
+              <span className="sr-only">清除筛选</span>
+            </button>
+          )}
         </div>
 
         <div className="col-span-2 flex items-center gap-2">
@@ -810,7 +952,9 @@ export function OverviewPage() {
               variant="outline"
               size="sm"
               className="h-8 px-3 text-xs"
-              onClick={() => patchParams({ q: null, state: null, tag: null })}
+              onClick={() =>
+                patchParams({ q: null, state: null, tag: null, issue: null })
+              }
             >
               清除筛选
             </Button>

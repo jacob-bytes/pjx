@@ -1,5 +1,5 @@
 import { useSearchParams } from "react-router"
-import { BellSlash } from "@phosphor-icons/react"
+import { BellSlash, Funnel, X } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { EmptyState } from "@/components/empty-state"
 import { useRuleEnabled } from "@/components/settings-provider"
@@ -101,8 +101,22 @@ export function AlertsPage() {
     setParams(next)
   }
 
+  /*
+    `state=firing`：总览的「触发中事件」卡片点进来要正好是那几条，
+    而不是把 resolved 的历史也一起列出来（否则"卡片 3"与"表里 N 行"又对不上）。
+  */
+  const state = pickParam(params, "state", ["all", "firing", "resolved"] as const, "all")
+  const setState = (value: string) => {
+    const next = new URLSearchParams(params)
+    if (value === "all") next.delete("state")
+    else next.set("state", value)
+    setParams(next)
+  }
+
   const events = alertEvents.filter(
-    (event) => level === "all" || event.level === level,
+    (event) =>
+      (level === "all" || event.level === level) &&
+      (state === "all" || event.state === state),
   )
 
   return (
@@ -126,6 +140,18 @@ export function AlertsPage() {
             规则
           </TabsTrigger>
         </TabsList>
+
+        {state !== "all" && (
+          <button
+            type="button"
+            onClick={() => setState("all")}
+            className="ml-2 flex h-7 shrink-0 items-center gap-1.5 rounded-md border bg-card px-2 text-2xs text-foreground transition-colors dur-2 hover:bg-muted/50"
+          >
+            <Funnel className="size-3 shrink-0 text-muted-foreground" />
+            {state === "firing" ? "仅触发中" : "仅已恢复"}
+            <X className="size-3 shrink-0 text-subtle" />
+          </button>
+        )}
 
         <Segmented
           ariaLabel="按级别筛选"

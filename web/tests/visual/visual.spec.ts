@@ -161,6 +161,74 @@ test.describe("后台", () => {
     飘在卡片中间。截图评审时一眼就能看出来，但快照测试照样绿（它只比对"和上次一样"）。
     所以补一条**结构性**断言：任一卡片的内部空白不得超过卡片高度的 35%。
   */
+  /*
+    一致性守卫：**卡片说几个，点进去就必须是几行**。
+
+    需求方指出的问题：卡片写「触发中告警 3 · 需要处理」，而下方「需要处理」横幅是 5 项 ——
+    同一个词指两件事，数字还对不上。根因是两条口径（事件 vs 机器）和两种记法（按问题 vs 按机器）。
+    现在统一成"一台机器一条待办"，并且每个数字都能下钻成一个行数完全相等的列表。
+    这条用例就是那个不变量的机器化版本：**任一数字与其余列表不等即失败**。
+  */
+  test("后台 · 卡片数字与下钻行数一致", async ({ page }) => {
+    await makeDeterministic(page)
+
+    const gotoAdmin = async (path = "/admin/") => {
+      await page.goto(path)
+      await waitForData(page)
+    }
+    const cards = () =>
+      page.evaluate(() =>
+        Object.fromEntries(
+          [...document.querySelectorAll('[data-testid="admin-stats"] > div')].map(
+            (card) => [
+              (card.querySelector("dt")?.textContent ?? "").trim(),
+              (card.querySelector("dd")?.textContent ?? "").trim(),
+            ],
+          ),
+        ),
+      )
+
+    await gotoAdmin()
+    const values = await cards()
+    const count = (label: string) =>
+      Number((values[label] ?? "").match(/\d+/)?.[0] ?? -1)
+
+    // ① 三个"台数"卡片各自的下钻
+    for (const [label, param] of [
+      ["需要处理", "any"],
+      ["agent 落后", "agent"],
+    ] as const) {
+      await gotoAdmin()
+      await page.locator(`[data-testid="admin-stats"] a[aria-label^="${label}"]`).click()
+      expect(page.url()).toContain(`issue=${param}`)
+      // 用 toHaveCount：URL 先变、表格后变，必须让它自动重试而不是读一次
+      await expect(page.locator("tbody tr")).toHaveCount(count(label))
+    }
+
+    // ② 主卡里的「N 台离线」
+    await gotoAdmin()
+    const offlineLink = page.locator('[data-testid="admin-stats"] a[href*="issue=offline"]')
+    const offline = Number((await offlineLink.textContent())?.match(/\d+/)?.[0] ?? -1)
+    await offlineLink.click()
+    await expect(page.locator("tbody tr")).toHaveCount(offline)
+
+    // ③ 横幅上的分类计数（故障 / 维护）
+    for (const label of ["故障", "维护"]) {
+      await gotoAdmin()
+      const text = await page.locator("main").innerText()
+      const want = Number(text.match(new RegExp(`${label} (\\d+)`))?.[1] ?? -1)
+      expect(want).toBeGreaterThanOrEqual(0)
+      await page.locator("main button", { hasText: label }).first().click()
+      await expect(page.locator("tbody tr")).toHaveCount(want)
+    }
+
+    // ④ 事件卡 → 事件页（带上 state=firing，行数同样要对上）
+    await gotoAdmin()
+    await page.locator('[data-testid="admin-stats"] a[aria-label^="触发中事件"]').click()
+    await page.waitForURL(/alerts/)
+    await expect(page.locator("tbody tr")).toHaveCount(count("触发中事件"))
+  })
+
   test("后台 · 顶部卡片没有大面积空白", async ({ page }) => {
     await makeDeterministic(page)
     await page.goto("/admin/")
