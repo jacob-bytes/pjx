@@ -1,10 +1,18 @@
 import { useSyncExternalStore } from "react"
 import { clamp } from "@/lib/format"
-import { NODES, type NodeSeed, type Status } from "@/lib/nodes"
+import {
+  NODES,
+  hashString,
+  uptimeDaysFor,
+  type NodeSeed,
+  type Status,
+  type UptimeDay,
+  type UptimeState,
+} from "@/lib/nodes"
 
 // Status / NodeSeed 的唯一来源是 @/lib/nodes；这里转出去，
 // 让既有 `import type { Status } from "@/public/mock"` 不用改。
-export type { NodeSeed, Status }
+export type { NodeSeed, Status, UptimeDay, UptimeState }
 
 export interface IspLatency {
   id: string
@@ -22,15 +30,6 @@ export interface PingTarget {
   history: number[]
   /** 丢包历史序列。之前只有标量 loss，画不出趋势 */
   lossHistory: number[]
-}
-
-export type UptimeState = "ok" | "partial" | "off" | "none"
-
-export interface UptimeDay {
-  date: string
-  state: UptimeState
-  /** 当日正常率 0-100 */
-  ratio: number
 }
 
 /** 详情页的时间范围档位 */
@@ -193,15 +192,6 @@ function pushBars(target: number[], value: number) {
    实时档用每秒在变的 live 数组；更长的档位是静态历史，按 key 确定性生成后缓存 ——
    用 PRNG 而不是 Math.random，否则每次重渲染曲线都会重新洗牌。
    ------------------------------------------------------------------ */
-
-function hashString(value: string) {
-  let hash = 2166136261
-  for (let index = 0; index < value.length; index++) {
-    hash ^= value.charCodeAt(index)
-    hash = Math.imul(hash, 16777619)
-  }
-  return hash >>> 0
-}
 
 /**
  * 丢包序列。
@@ -421,37 +411,6 @@ function pick<T>(pool: T[], seed: number, salt = 0) {
   return pool[(seed + salt) % pool.length]
 }
 
-/** 30 天在线时间轴：绝大多数正常，偶尔部分异常 */
-function makeUptimeDays(seed: number): UptimeDay[] {
-  let state = seed || 1
-  const rand = () => {
-    state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff
-    return state / 0x7fffffff
-  }
-  const days: UptimeDay[] = []
-  const today = new Date()
-  for (let back = 29; back >= 0; back--) {
-    const date = new Date(today)
-    date.setDate(today.getDate() - back)
-    const roll = rand()
-    const dayState: UptimeState =
-      roll > 0.985 ? "off" : roll > 0.94 ? "partial" : roll < 0.012 ? "none" : "ok"
-    days.push({
-      date: `${date.getMonth() + 1}月${date.getDate()}日`,
-      state: dayState,
-      ratio:
-        dayState === "ok"
-          ? 100
-          : dayState === "partial"
-            ? Number((97 + rand() * 2.5).toFixed(1))
-            : dayState === "off"
-              ? Number((88 + rand() * 8).toFixed(1))
-              : 0,
-    })
-  }
-  return days
-}
-
 function makeNode(seed: NodeSeed): PublicNode {
   // region / env / ip / agent 是后台专有字段，别渗进前台的节点对象
   const {
@@ -526,7 +485,7 @@ function makeNode(seed: NodeSeed): PublicNode {
     tcpSeries: seedSeries(60, tcp, 8, 12, 0, 4000),
     udpSeries: seedSeries(60, udp, 2, 3, 0, 400),
     procSeries: seedSeries(60, proc, 5, 8, 1, 800),
-    uptimeDays: makeUptimeDays(hash),
+    uptimeDays: uptimeDaysFor(seed.id),
     os: os ?? pick(OS_POOL, hash).os,
     kernel: pick(OS_POOL, hash).kernel,
     arch: "amd64",

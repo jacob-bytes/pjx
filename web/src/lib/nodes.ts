@@ -13,6 +13,66 @@
  */
 export type Status = "ok" | "warn" | "crit" | "off"
 
+export type UptimeState = "ok" | "partial" | "off" | "none"
+
+export interface UptimeDay {
+  date: string
+  state: UptimeState
+  /** 当日正常率 0-100 */
+  ratio: number
+}
+
+/** 稳定的字符串散列：同一个 id 每次得到同一份 mock 数据 */
+export function hashString(value: string): number {
+  let hash = 2166136261
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return hash >>> 0
+}
+
+/**
+ * 30 天在线时间轴（绝大多数正常、偶尔部分异常）。
+ *
+ * **放在规范数据里而不是前台 mock 里** —— 同一台机器的 30 天历史和它叫什么、
+ * 在哪个机房一样，属于节点自身的事实。后台的「30 天」列与前台卡片读的是这一份，
+ * 两边不会各推一份（§BB 统一 mock 的延续）。
+ */
+const UPTIME_CACHE = new Map<string, UptimeDay[]>()
+export function uptimeDaysFor(id: string): UptimeDay[] {
+  const cached = UPTIME_CACHE.get(id)
+  if (cached) return cached
+  let state = hashString(id) || 1
+  const rand = () => {
+    state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff
+    return state / 0x7fffffff
+  }
+  const days: UptimeDay[] = []
+  const today = new Date()
+  for (let back = 29; back >= 0; back--) {
+    const date = new Date(today)
+    date.setDate(today.getDate() - back)
+    const roll = rand()
+    const dayState: UptimeState =
+      roll > 0.985 ? "off" : roll > 0.94 ? "partial" : roll < 0.012 ? "none" : "ok"
+    days.push({
+      date: `${date.getMonth() + 1}月${date.getDate()}日`,
+      state: dayState,
+      ratio:
+        dayState === "ok"
+          ? 100
+          : dayState === "partial"
+            ? Number((97 + rand() * 2.5).toFixed(1))
+            : dayState === "off"
+              ? Number((88 + rand() * 8).toFixed(1))
+              : 0,
+    })
+  }
+  UPTIME_CACHE.set(id, days)
+  return days
+}
+
 export interface NodeSeed {
   /** 全站唯一 id，同时是前台详情页的 URL(`/?node=<id>`) 与后台 `?server=<id>` */
   id: string

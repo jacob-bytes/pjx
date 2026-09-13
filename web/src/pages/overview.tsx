@@ -52,7 +52,9 @@ import { METRIC_LIMITS } from "@/lib/settings"
 import { pickParam } from "@/lib/url"
 import { formatLastSeen } from "@/lib/format"
 import { TABLE_VIEWPORT } from "@/lib/layout"
+import { uptimeDaysFor } from "@/lib/nodes"
 import { Tooltip } from "@/components/ui/tooltip"
+import { UptimeStrip, uptimeAvailability } from "@/components/uptime-strip"
 import { cn } from "@/lib/utils"
 
 const TAGS = ["全部", "生产", "备用", "香港", "东京", "新加坡"] as const
@@ -167,6 +169,7 @@ function ToneBadge({
 const SORTS = {
   name: "节点",
   agent: "agent",
+  uptime: "30 天可用率",
   lastSeen: "最后上报",
   concern: "关注",
 } as const
@@ -262,7 +265,7 @@ export function OverviewPage() {
   const sortKey = pickParam(
     params,
     "sort",
-    ["name", "agent", "lastSeen", "concern"] as const,
+    ["name", "agent", "uptime", "lastSeen", "concern"] as const,
     "name",
   )
   const sortDir = pickParam(params, "dir", ["asc", "desc"] as const, "asc")
@@ -324,6 +327,12 @@ export function OverviewPage() {
       switch (sortKey) {
         case "agent":
           return compareVersion(a.agent, b.agent)
+        case "uptime":
+          // 升序 = 可用率最低的排最前（"谁最不稳"）
+          return (
+            uptimeAvailability(uptimeDaysFor(a.id)) -
+            uptimeAvailability(uptimeDaysFor(b.id))
+          )
         case "lastSeen":
           return a.lastSeenSec - b.lastSeenSec
         case "concern":
@@ -341,6 +350,77 @@ export function OverviewPage() {
   }, [servers, sortKey, sortDir])
 
   const online = fleet.filter((item) => item.status !== "off").length
+  /** 离线的是哪几台 —— 主卡里直接点名，省得再去表里找 */
+  const offlineNames = fleet
+    .filter((item) => item.offline)
+    .map((item) => item.name)
+    .join("、")
+  /*
+    机队 30 天：**机队级事件**，而不是"任意一台抖了一下"。
+
+    一开始按"逐日取最坏"聚合，实测发现问题：每台机器约 6% 的天数有抖动，
+    12 台下来 `1-0.94^12 ≈ 52%` —— 条子一半是琥珀色，看起来像机队很不稳，
+    而每台自己的可用率其实都在 99% 上下。聚合口径必须比单机更"钝"：
+
+      任一台离线            → off（真的出事了）
+      两台及以上同时异常     → partial（面够宽，算机队级劣化）
+      只有一台抖了一下      → ok（单机噪声，那一台自己的行里看得到）
+
+    每日 ratio 取当天所有节点可用率的均值 —— 于是"可用率 X%"是真实的机队均值，
+    不是从段颜色反推出来的。
+  */
+  const fleetDays = uptimeDaysFor(fleet[0].id).map((day) => ({ ...day }))
+  fleetDays.forEach((_, index) => {
+    let offCount = 0
+    let degradedCount = 0
+    let ratioSum = 0
+    for (const node of fleet) {
+      const day = uptimeDaysFor(node.id)[index]
+      if (day.state === "off") offCount++
+      else if (day.state === "partial") degradedCount++
+      ratioSum += day.state === "none" ? 0 : day.ratio
+    }
+    const state =
+      offCount > 0 ? "off" : degradedCount >= 2 ? "partial" : "ok"
+    fleetDays[index] = {
+      ...fleetDays[index],
+      state,
+      ratio: Number((ratioSum / fleet.length).toFixed(1)),
+    }
+  })
+
+  /*
+    「需要处理」清单：把"扫 12 行找徽章"变成抬头就看到该管什么。
+    纯派生（离线 / 关注项超阈值 / agent 落后），不是新数据；每条直接打开对应节点面板。
+  */
+  const concerns: { id: string; name: string; reason: string; tone: "crit" | "warn" }[] = []
+  for (const node of fleet) {
+    if (node.offline) {
+      concerns.push({ id: node.id, name: node.name, reason: "已离线", tone: "crit" })
+      continue
+    }
+    const concern = tightestMetric(node)
+    if (concern?.over) {
+      concerns.push({
+        id: node.id,
+        name: node.name,
+        reason: `${concern.label} ${Math.round(concern.value)}%`,
+        tone: "crit",
+      })
+    }
+  }
+  for (const node of fleet) {
+    if (!node.offline && compareVersion(node.agent, LATEST_AGENT) < 0) {
+      concerns.push({
+        id: node.id,
+        name: node.name,
+        reason: `agent v${node.agent}`,
+        tone: "warn",
+      })
+    }
+  }
+  const topConcerns = concerns.slice(0, 3)
+
   const firingEvents = alertEvents.filter((event) => event.state === "firing")
   const firing = firingEvents.length
   const firingCrit = firingEvents.filter((event) => event.level === "crit").length
@@ -379,33 +459,91 @@ export function OverviewPage() {
         */}
         {!loaded ? (
           <div
-            className="grid shrink-0 grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5"
+            className="grid shrink-0 grid-cols-2 gap-2.5 sm:grid-cols-4 xl:grid-cols-[minmax(0,2.15fr)_repeat(4,minmax(0,1fr))]"
             aria-busy="true"
             aria-label="加载中"
           >
-            {Array.from({ length: 5 }, (_, index) => (
-              <Skeleton key={index} className="h-[83px]" />
+            <Skeleton className="col-span-2 h-[124px] sm:col-span-4 xl:col-span-1" />
+            {Array.from({ length: 4 }, (_, index) => (
+              <Skeleton key={index} className="h-[104px]" />
             ))}
           </div>
         ) : (
         <dl
           data-testid="admin-stats"
-          className="grid shrink-0 grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5"
+          className="grid shrink-0 grid-cols-2 gap-2.5 sm:grid-cols-4 xl:grid-cols-[minmax(0,2.15fr)_repeat(4,minmax(0,1fr))]"
         >
+          {/*
+            v2：从"5 张完全等价的卡"改成"1 个状态主卡 + 4 个紧凑指标"。
+            等价卡片无法表达优先级，而运维台的第一个问题是"现在要不要管" ——
+            所以把"在线/离线"放大成主卡，并给它机队 30 天历史与待处理清单；
+            其余四项降为紧凑指标（宽度 1fr），主次靠**宽度**分层而不是高度
+            （§BD 刚把卡片收敛成"纯白 + 3px 指示条"，再用高度做层级会把节奏弄乱）。
+          */}
+          <div className="card col-span-2 flex flex-col gap-2 p-3 sm:col-span-4 xl:col-span-1">
+            <dt className="flex items-center gap-1.5 text-2xs text-muted-foreground">
+              <DesktopTower className="size-3.5 shrink-0 text-muted-foreground/60" />
+              <span className="truncate">机队状态</span>
+            </dt>
+            <dd className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <span
+                  className={cn(
+                    "num text-2xl font-semibold leading-none tracking-tight",
+                    fleet.length - online > 0 && "text-crit-text",
+                  )}
+                >
+                  {online} / {fleet.length}
+                </span>
+                <span className="flex items-center gap-1.5 text-2xs text-subtle">
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "size-[6px] shrink-0 rounded-full",
+                      fleet.length - online > 0 ? "bg-crit" : "bg-ok",
+                    )}
+                  />
+                  {fleet.length - online > 0
+                    ? `在线 · ${fleet.length - online} 台离线（${offlineNames}）`
+                    : "在线 · 全部在线"}
+                </span>
+              </div>
+              {/*
+                机队 30 天：整条只给一个汇总结论（读屏与 title），
+                逐格不做交互元素 —— 12 行才需要那样，这里一张卡不需要。
+              */}
+              <UptimeStrip
+                days={fleetDays}
+                label="机队"
+                segmentClassName="h-4"
+              />
+              {/* 数值以文字可见（skill 的可视化规范：不能只靠颜色） */}
+              <div className="flex items-center justify-between text-2xs text-subtle">
+                <span>{fleetDays[0]?.date}</span>
+                <span className="num">可用率 {uptimeAvailability(fleetDays)}%</span>
+                <span>今天</span>
+              </div>
+              {topConcerns.length > 0 && (
+                <div className="mt-auto flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t pt-2 text-2xs text-muted-foreground">
+                  <span className="text-subtle">需要处理</span>
+                  {topConcerns.map((concern) => (
+                    <Link
+                      key={concern.id + concern.reason}
+                      to={`?server=${concern.id}`}
+                      className="rounded-xs underline-offset-2 transition-colors dur-2 hover:text-foreground hover:underline"
+                    >
+                      <span className={cn("num", concern.tone === "crit" ? "text-crit-text" : "text-warn-text")}>
+                        {concern.name}
+                      </span>{" "}
+                      {concern.reason}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </dd>
+          </div>
+
           {[
-            {
-              label: "在线",
-              value: `${online} / ${fleet.length}`,
-              // 有节点离线 = 有机器是 down 的 → crit（与前台状态通栏同一判据）
-              tone: online === fleet.length ? null : ("crit" as const),
-              note:
-                online === fleet.length
-                  ? "全部在线"
-                  : `${fleet.length - online} 台离线`,
-              icon: DesktopTower,
-              // P8：点卡片去看"到底哪几台不健康"——不是装饰性 hover，是真的有去处
-              to: "?state=bad",
-            },
             {
               label: "触发中告警",
               value: String(firing),
@@ -456,32 +594,29 @@ export function OverviewPage() {
             <div
               key={item.label}
               className={cn(
-                // 纯白 + 微边框 + 轻阴影（card 工具类），异常态**不加底色**
-                "card relative flex flex-col gap-1.5 overflow-hidden p-3 pl-3.5",
+                /*
+                  纯白 + 微边框 + 轻阴影（card 工具类），异常态**不加底色**。
+                  justify-between：4 张 tile 与主卡同高（grid 拉伸），
+                  内容按"标签 / 数字 / 说明"三段分布，否则底部会空出一大块。
+                */
+                "card relative flex flex-col justify-between gap-1.5 overflow-hidden p-3",
                 // 可点之后 hover 必须有反馈；hover 底色统一用 /50（与数据行同一个步骤）
                 "transition-colors dur-2 has-[a:hover]:bg-muted/50",
                 /*
                   F2：焦点环画在**卡片自己**身上。
                   原来指望 stretched link 的 outline，但链接是 `absolute inset-0`、
                   而卡片有 `overflow-hidden` —— 全局 `outline-offset: 2px` 是向外画的，
-                  于是整个环被卡片裁掉，键盘用户看不到焦点（像素级验证：25 个可聚焦元素里
-                  只有这 5 张卡焦点前后画面完全没变）。
-                  卡片自己的 ring 属于自身的绘制，不受自身 overflow 裁剪。
+                  于是整个环被卡片裁掉，键盘用户看不到焦点。
                 */
                 "has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring",
+                item.tone && "pl-3.5",
               )}
             >
-              {/*
-                异常态：左边缘 3px 指示条。用绝对定位而不是 border-l-4 ——
-                边框会把内容挤 4px，5 张卡的文字左边界就对不齐了。
-              */}
+              {/* 异常态：左边缘 3px 指示条（绝对定位，不用 border-l-4 —— 边框会挤内容） */}
               {item.tone && (
                 <span
                   aria-hidden
-                  className={cn(
-                    "absolute inset-y-0 left-0 w-[3px]",
-                    TONE_BAR[item.tone],
-                  )}
+                  className={cn("absolute inset-y-0 left-0 w-[3px]", TONE_BAR[item.tone])}
                 />
               )}
               {/*
@@ -513,10 +648,8 @@ export function OverviewPage() {
               </dd>
               <div className="flex items-center gap-1.5 text-2xs text-subtle">
                 {/*
-                  状态点：正常=绿、异常=对应警示色（静态，不呼吸）。
-                  只给**有健康语义**的三张卡（在线 / 告警 / agent）——
-                  探测任务与告警规则是配置数量，停用是有意为之，套状态点会把
-                  "配置"说成"健康"（§AF）。
+                  状态点：正常=绿、异常=对应警示色（静态，不呼吸 —— §P 的硬约束）。
+                  只给**有健康语义**的卡：探测任务与告警规则是配置数量，停用是有意为之。
                 */}
                 {item.label !== "探测任务" && item.label !== "告警规则" && (
                   <span
@@ -712,6 +845,19 @@ export function OverviewPage() {
                 <TableHead className="h-9 px-3 text-xs font-medium">
                   地址 / 系统
                 </TableHead>
+                {/*
+                  30 天可用率。窄屏（< lg）隐藏：1024 下已经 8 列，再加一列会开始截断；
+                  而这一列的信息在宽屏才有比较价值（一眼看出"谁不稳"）。
+                */}
+                <SortableHead
+                  sortKey="uptime"
+                  active={sortKey === "uptime"}
+                  dir={sortDir}
+                  onSort={setSort}
+                  className="hidden lg:table-cell"
+                >
+                  30 天
+                </SortableHead>
                 <SortableHead
                   sortKey="agent"
                   active={sortKey === "agent"}
@@ -756,10 +902,10 @@ export function OverviewPage() {
                   className="group/row cursor-pointer"
                   onClick={() => setParams({ server: item.id })}
                 >
-                  <TableCell className="h-11 px-3">
+                  <TableCell className="h-11 px-3 py-1.5">
                     <StatusDot status={item.status} />
                   </TableCell>
-                  <TableCell className="h-11 px-3">
+                  <TableCell className="h-11 px-3 py-1.5">
                     {/*
                       §AQ 把名字与标签堆成两行，是因为那一格只有 132px；
                       监控列搬走之后它有 496px，并排更紧凑、也少一层竖直噪声。
@@ -785,7 +931,7 @@ export function OverviewPage() {
                       */}
                     </div>
                   </TableCell>
-                  <TableCell className="h-11 px-3">
+                  <TableCell className="h-11 px-3 py-1.5">
                     {/*
                       两行都用 flex 行，而不是 inline 流：
                       行内元素会按基线对齐，一个 inline-block 的徽章会把行盒从 14px
@@ -804,8 +950,12 @@ export function OverviewPage() {
                         {nodeTags(settings, item.id, item.tags).join(" · ")}
                       </span>
                     </div>
-                    {/* F6：系统也改回纯文本 —— 它本来就是次要信息，不值得再占一个底色块 */}
-                    <div className="mt-0.5 flex">
+                    {/*
+                      F6：系统也改回纯文本 —— 它本来就是次要信息，不值得再占一个底色块。
+                      v2：去掉 mt-0.5 —— 两行的 line-height 已经提供了间距，
+                      省下这 2px 让整行落进 44px 档（12 行一屏能多看一行）。
+                    */}
+                    <div className="flex">
                       <Tooltip label={item.os}>
                         <span className="truncate text-2xs text-subtle">
                           {item.os}
@@ -813,7 +963,25 @@ export function OverviewPage() {
                       </Tooltip>
                     </div>
                   </TableCell>
-                  <TableCell className="h-11 px-3">
+                  {/*
+                    v2 的「30 天」列：一条小状态条 + 可用率数字。
+                    数字必须以**文字**出现（skill 的可视化规范：不能只靠颜色/hover），
+                    整条的状态汇总在 aria-label 里给读屏。
+                  */}
+                  <TableCell className="hidden h-11 px-3 py-1.5 lg:table-cell">
+                    <div className="flex items-center gap-2">
+                      <UptimeStrip
+                        days={uptimeDaysFor(item.id)}
+                        label={item.name}
+                        className="w-[54px] shrink-0"
+                        segmentClassName="h-3.5"
+                      />
+                      <span className="num shrink-0 text-2xs text-subtle">
+                        {uptimeAvailability(uptimeDaysFor(item.id))}%
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="h-11 px-3 py-1.5">
                     {/*
                       F6：只有**落后**的才是徽章（要看的异常），同版本的用纯文本。
                       原来每行都有一个 v0.3.1 徽章，12 行就是 12 个没有信息量的底色块。
@@ -837,7 +1005,7 @@ export function OverviewPage() {
                   >
                     <MaintenanceSwitch server={item} />
                   </TableCell>
-                  <TableCell className="h-11 px-3">
+                  <TableCell className="h-11 px-3 py-1.5">
                     {/* 离线时"多久没上报"才是要看的数 —— 用 crit 徽章顶出来 */}
                     {item.offline ? (
                       <ToneBadge tone="crit" title="超过离线判定阈值">
@@ -849,7 +1017,7 @@ export function OverviewPage() {
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="h-11 px-3">
+                  <TableCell className="h-11 px-3 py-1.5">
                     {/*
                       只报异常：都在阈值 90% 以下就留空。原来这里是
                       「数值 + 进度条」的 CPU/内存/磁盘 三列 —— 那是前台卡片的同一批数据。
@@ -874,7 +1042,7 @@ export function OverviewPage() {
                     这个按钮此前是永久 invisible（仍可点，但看不见）。
                     touch: 下改成常显，顺带把命中区从 24px 撑到 44px。
                   */}
-                  <TableCell className="h-11 px-2">
+                  <TableCell className="h-11 px-2 py-1.5">
                     <div
                       className="opacity-0 transition-opacity dur-2 focus-within:opacity-100 group-hover/row:opacity-100 touch:opacity-100"
                       onClick={(event) => event.stopPropagation()}
